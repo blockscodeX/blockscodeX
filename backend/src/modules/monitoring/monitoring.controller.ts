@@ -1,7 +1,11 @@
 import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MonitoringGateway } from './monitoring.gateway';
 
 @Controller('exam/monitoring')
+@UseGuards(JwtAuthGuard)
+@Throttle({ default: { limit: 30, ttl: 60000 } })
 export class MonitoringController {
     constructor(private gateway: MonitoringGateway) { }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import Mailjet from "node-mailjet"
 import { LRUCache } from "lru-cache"
+import { siteConfig } from "../../config/site"
 
 // Rate limiting: 5 requests per IP per hour
 const rateLimit = new LRUCache<string, number>({
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
         {
           From: {
             Email: SENDER_EMAIL,
-            Name: "Blockscode Contact Form",
+            Name: siteConfig.contactFormName,
           },
           To: [
             {
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
     console.error("Contact API error:", error)
     // Log detailed Mailjet error if available
     if (error.statusCode && error.response) {
-        console.error("Mailjet Error Details:", JSON.stringify(error.response.body, null, 2))
+      console.error("Mailjet Error Details:", JSON.stringify(error.response.body, null, 2))
     }
     return NextResponse.json(
       { error: "Failed to send message. Please try again later." },

@@ -1,0 +1,13 @@
+node_modules
+dist
+npm-debug.log
+.env
+.git
+.gitignore
+README.md
+docker-compose.yml
+Dockerfile
+deployment_guide.md
+task.md
+implementation_plan.md
+walkthrough.md

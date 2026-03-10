@@ -36,7 +36,7 @@ export default function ExamSubmitView({ sections, currentSectionId, onClose, on
     };
 
     return (
-        <div className="w-full h-full bg-slate-50 flex flex-col font-inter overflow-hidden relative animate-in fade-in duration-300">
+        <div className="w-full h-full bg-slate-50 flex flex-col font-sans overflow-hidden relative animate-in fade-in duration-300">
             {/* Background Decoration */}
             <div className="absolute top-0 left-0 w-full h-32 bg-slate-100/50 -z-10 origin-top-left transform" />
 

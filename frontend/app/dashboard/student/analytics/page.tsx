@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useMemo, useEffect } from "react";
 import Navbar from "@/app/components/Navbar";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { useSearchParams, useRouter } from "next/navigation";
 import { StudentService } from "@/services/api/StudentService";
 import {
@@ -180,11 +180,11 @@ export default function AnalyticsPage() {
     };
 
     if (loading) {
-        return <Loading />;
+        return <DashboardSkeleton type="main" userRole={studentNameParam ? 'teacher' : 'student'} />;
     }
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] font-inter selection:bg-[var(--brand-light)]">
+        <div className="min-h-screen bg-[#F8FAFC] font-sans selection:bg-[var(--brand-light)]">
             <Navbar userRole={studentNameParam ? 'teacher' : undefined} />
 
             {/* TEACHER VIEW BANNER */}
@@ -499,25 +499,26 @@ export default function AnalyticsPage() {
                                                                 {q.attempts.map((attempt: Attempt, idx: number) => {
                                                                     const isTeacherView = !!searchParams.get("studentId");
                                                                     return (
-                                                                    <div 
-                                                                        key={idx} 
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            if (!isTeacherView) {
-                                                                                router.push(`/dashboard/student/unit/${q.unitId}?attemptId=${attempt.id}`);
-                                                                            }
-                                                                        }}
-                                                                        className={`grid grid-cols-3 px-8 py-4 text-[11px] font-bold text-slate-600 items-center text-center transition-colors ${!isTeacherView ? 'cursor-pointer hover:bg-slate-50/50' : ''}`}
-                                                                    >
-                                                                        <div className="font-mono text-slate-400">{attempt.date}</div>
-                                                                        <div className="text-slate-800">{attempt.testCases}</div>
-                                                                        <div>
-                                                                            <span className={`px-3 py-1 rounded-lg text-[10px] uppercase font-black tracking-widest ${attempt.status === 'success' ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' : 'bg-rose-50 text-rose-500 border border-rose-100'}`}>
-                                                                                {attempt.status}
-                                                                            </span>
+                                                                        <div
+                                                                            key={idx}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                if (!isTeacherView) {
+                                                                                    router.push(`/dashboard/student/unit/${q.unitId}?attemptId=${attempt.id}`);
+                                                                                }
+                                                                            }}
+                                                                            className={`grid grid-cols-3 px-8 py-4 text-[11px] font-bold text-slate-600 items-center text-center transition-colors ${!isTeacherView ? 'cursor-pointer hover:bg-slate-50/50' : ''}`}
+                                                                        >
+                                                                            <div className="font-mono text-slate-400">{attempt.date}</div>
+                                                                            <div className="text-slate-800">{attempt.testCases}</div>
+                                                                            <div>
+                                                                                <span className={`px-3 py-1 rounded-lg text-[10px] uppercase font-black tracking-widest ${attempt.status === 'success' ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' : 'bg-rose-50 text-rose-500 border border-rose-100'}`}>
+                                                                                    {attempt.status}
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                )})}
+                                                                    )
+                                                                })}
                                                             </div>
                                                         </div>
                                                     </div>

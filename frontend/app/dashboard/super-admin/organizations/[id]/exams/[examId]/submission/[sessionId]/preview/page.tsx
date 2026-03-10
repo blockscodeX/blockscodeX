@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useMemo, useEffect } from 'react';
 import Navbar from '@/app/components/Navbar';
-import Loading from '@/app/loading';
+import CoursePlayerSkeleton from '@/app/components/Skeletons/CoursePlayerSkeleton';
 import UnitRenderer, { UnitQuestion } from '@/app/components/UnitRenderer';
 import UnitNavHeader from '@/app/components/UnitNavHeader';
 import ExamSidebar from '@/app/components/ExamSidebar';
@@ -127,7 +127,7 @@ export default function SuperAdminSubmissionPreviewPage({ params }: { params: Pr
 
     const handleMarkChange = (val: string) => {
         if (!currentQuestion) return;
-        
+
         // Validate input: allow empty string or numbers only
         if (val !== '' && isNaN(Number(val))) return;
 
@@ -138,7 +138,7 @@ export default function SuperAdminSubmissionPreviewPage({ params }: { params: Pr
         setMarks(prev => ({ ...prev, [currentQuestion.id]: val }));
     };
 
-    if (loading) return <Loading />;
+    if (loading) return <CoursePlayerSkeleton hasSidebar={true} isExamMode={false} />;
 
     if (!submissionData) {
         return (

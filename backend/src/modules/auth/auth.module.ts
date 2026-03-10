@@ -27,6 +27,6 @@ import { StorageModule } from '../../services/storage/storage.module';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, OrgFeaturesGuard, OrgStatusGuard, MailService],
-  exports: [AuthService, OrgFeaturesGuard, OrgStatusGuard],
+  exports: [AuthService, OrgFeaturesGuard, OrgStatusGuard, JwtModule],
 })
 export class AuthModule { }

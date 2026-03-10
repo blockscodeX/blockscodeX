@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import Navbar from "@/app/components/Navbar";
 import { useRouter } from "next/navigation";
 import { TeacherService } from "@/services/api/TeacherService";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { useToast } from "@/app/components/Common/Toast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Users, GraduationCap, X, Search, Filter, Mail, Calendar, CheckCircle2, Trash2 } from "lucide-react";
@@ -42,7 +42,7 @@ export default function TeacherStudentsPage() {
 
         try {
             await TeacherService.unenrollStudent(courseId, studentId);
-            
+
             // Update selected student state immediately
             if (selectedStudent) {
                 const updatedCourses = selectedStudent.courses.filter((c: any) => c.id !== courseId);
@@ -52,7 +52,7 @@ export default function TeacherStudentsPage() {
             // Refresh the main list
             const data = await TeacherService.getStudents();
             setStudents(data);
-            
+
         } catch (error) {
             console.error("Failed to unenroll", error);
             toastError("Failed to unenroll student");
@@ -67,7 +67,7 @@ export default function TeacherStudentsPage() {
         router.push(`/dashboard/student/analytics?studentId=${student.id}&studentName=${encodeURIComponent(student.name)}`);
     };
 
-    if (isLoading) return <Loading />;
+    if (isLoading) return <DashboardSkeleton type="list" userRole="teacher" />;
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-[var(--brand-light)] selection:text-[var(--brand-dark)]">
@@ -223,7 +223,7 @@ export default function TeacherStudentsPage() {
                                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{course.completedUnits}/{course.totalUnits} Units Completed</p>
                                                         </div>
                                                     </div>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleUnenroll(course.id, selectedStudent.id)}
                                                         className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover/course:opacity-100"
                                                         title="Unenroll Student"

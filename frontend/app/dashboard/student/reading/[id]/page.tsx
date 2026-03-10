@@ -16,7 +16,7 @@ export default function ReadingUnitPage() {
     const sidebarUnitsMapped = sidebarUnits.map(u => ({ ...u, done: u.done, active: u.active }));
 
     return (
-        <div className="h-screen flex flex-col bg-white overflow-hidden font-inter">
+        <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
             <Navbar />
 
             <div className="flex-1 flex overflow-hidden">

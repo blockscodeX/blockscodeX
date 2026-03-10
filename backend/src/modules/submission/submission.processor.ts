@@ -3,6 +3,8 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../../services/prisma/prisma.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Processor('submission_queue', {
     // Optimize for serverless Redis (reduce command usage)
@@ -14,7 +16,8 @@ import Redis from 'ioredis';
 export class SubmissionProcessor extends WorkerHost {
     constructor(
         private prisma: PrismaService,
-        @InjectRedis() private readonly redis: Redis
+        @InjectRedis() private readonly redis: Redis,
+        @InjectQueue('student-analytics') private studentAnalyticsQueue: Queue
     ) {
         super();
     }
@@ -35,10 +38,10 @@ export class SubmissionProcessor extends WorkerHost {
         try {
             // PERFORMANCE: Check Redis for cached grading data (Exam Questions)
             // We need examId first. We can cache "session:meta:{sessionId}" -> { examId, examQuestions }
-            
+
             const sessionCacheKey = `session:meta:${sessionId}`;
             const cachedSession = await this.redis.get(sessionCacheKey);
-            
+
             let examQuestions = null;
             let sessionStatus = null;
 
@@ -58,7 +61,7 @@ export class SubmissionProcessor extends WorkerHost {
                         }
                     }
                 });
-                
+
                 if (session) {
                     examQuestions = session.exam?.questions;
                     sessionStatus = session.status;
@@ -84,19 +87,19 @@ export class SubmissionProcessor extends WorkerHost {
             if (examQuestions) {
                 // Reuse variable name to minimize code change in logic below
                 // const examQuestions = session.exam.questions as any; <-- Removed
-                
+
                 // Helper to find question
                 const findQuestion = (questionsData: any, questionId: string) => {
                     // 1. Check if it's in sections
                     if (questionsData.sections && Array.isArray(questionsData.sections)) {
-                         for (const section of questionsData.sections) {
+                        for (const section of questionsData.sections) {
                             if (section.questions) {
                                 const q = section.questions.find((q: any) => q.id === questionId);
                                 if (q) return q;
                             }
                         }
                     }
-                    
+
                     // 2. Check if questionsData is array of sections or questions
                     if (Array.isArray(questionsData)) {
                         for (const item of questionsData) {
@@ -109,7 +112,7 @@ export class SubmissionProcessor extends WorkerHost {
                             if (item.id === questionId) return item;
                         }
                     }
-                    
+
                     // 3. Check if map (object with section keys)
                     if (typeof questionsData === 'object' && questionsData !== null) {
                         // Direct access check
@@ -124,7 +127,7 @@ export class SubmissionProcessor extends WorkerHost {
                             }
                         }
                     }
-                    
+
                     return null;
                 };
 
@@ -141,10 +144,10 @@ export class SubmissionProcessor extends WorkerHost {
                         const options = question.mcqOptions || question.options || [];
                         const correctIds = options.filter((o: any) => o.isCorrect).map((o: any) => o.id);
                         const selectedIds = Array.isArray(ans) ? ans : [ans];
-                        
+
                         // Check if correct (exact match)
                         const isCorrect = JSON.stringify(selectedIds.sort()) === JSON.stringify(correctIds.sort());
-                        
+
                         if (isCorrect) {
                             marks = question.marks || 1;
                         }
@@ -152,11 +155,11 @@ export class SubmissionProcessor extends WorkerHost {
                         // Check for execution result in answer
                         // The answer object itself might be the result, or it might be nested
                         const result = (typeof ans === 'object' && (ans as any).executionResult) ? (ans as any).executionResult : ans;
-                        
+
                         if (result && typeof result === 'object') {
                             const testCases = question.codingConfig?.testCases || [];
                             const resultsArray = result.testResults || result.results;
-                            
+
                             if (resultsArray && Array.isArray(resultsArray)) {
                                 resultsArray.forEach((res: any, idx: number) => {
                                     if (res.passed) {
@@ -170,7 +173,7 @@ export class SubmissionProcessor extends WorkerHost {
                             }
                         }
                     }
-                    
+
                     internalMarks[qId] = marks;
                 }
             }
@@ -178,35 +181,25 @@ export class SubmissionProcessor extends WorkerHost {
             // 2. Merge marks with existing marks (Fetch-Modify-Save pattern)
             // We need to fetch current answers to merge _internal_marks correctly
             // Note: This loses strict atomicity but is necessary for deep merge of _internal_marks
-            
+
             // However, to minimize race conditions, we can try to use the atomic update for the answer part,
             // and a separate update for marks? No, that's worse.
-            
+
             // Let's use the atomic update for the ANSWER, and then a separate update for MARKS.
             // This way, the answer is always saved safely. The marks might have a race condition but it's less critical (can be re-calculated).
-            
-            // Step A: Atomic Update of Answer
-            await this.prisma.$executeRawUnsafe(
-                `UPDATE "ExamSession" 
-                 SET "answers" = COALESCE("answers", '{}'::jsonb) || $1::jsonb,
-                     "updatedAt" = NOW()
-                 WHERE "id" = $2`,
-                JSON.stringify(answer),
-                sessionId
-            );
 
             // Step B: Update Marks (if any)
             if (Object.keys(internalMarks).length > 0) {
                 // We need to fetch current _internal_marks, merge, and save back.
-                const currentSession = await this.prisma.examSession.findUnique({ 
-                    where: { id: sessionId }, 
-                    select: { answers: true } 
+                const currentSession = await this.prisma.examSession.findUnique({
+                    where: { id: sessionId },
+                    select: { answers: true }
                 });
-                
+
                 const currentAnswers = (currentSession?.answers as any) || {};
                 const currentMarks = currentAnswers._internal_marks || {};
                 const newMarks = { ...currentMarks, ...internalMarks };
-                
+
                 const totalScore = Object.values(newMarks).reduce((a: any, b: any) => a + b, 0);
 
                 // We only update _internal_marks key in the jsonb
@@ -220,6 +213,28 @@ export class SubmissionProcessor extends WorkerHost {
                     sessionId,
                     totalScore
                 );
+            }
+
+            // Trigger question attempts for analytics
+            const sessionUser = await this.prisma.examSession.findUnique({
+                where: { id: sessionId }, select: { userId: true }
+            });
+            const userId = sessionUser?.userId;
+
+            for (const [qId, ans] of Object.entries(answer)) {
+                if (qId.startsWith('_')) continue;
+
+                const isCorrect = (internalMarks[qId] || 0) > 0;
+
+                await this.studentAnalyticsQueue.add('save-question-attempt', {
+                    userId,
+                    itemId: qId,
+                    sessionId: sessionId,
+                    type: 'EXAM',
+                    content: ans,
+                    isCorrect: isCorrect,
+                    score: internalMarks[qId]
+                });
             }
 
             // console.log(`[SubmissionProcessor] Atomic update completed for ${sessionId}`);
@@ -236,24 +251,29 @@ export class SubmissionProcessor extends WorkerHost {
         // Ensure score is calculated (in case of race conditions or missing updates)
         const session = await this.prisma.examSession.findUnique({
             where: { id: sessionId },
-            select: { answers: true, score: true }
+            select: { answers: true, score: true, userId: true }
         });
 
         let finalScore = session?.score;
-        
+
         if (finalScore === null || finalScore === undefined) {
-             const answers = (session?.answers as any) || {};
-             const marks = answers._internal_marks || {};
-             finalScore = Object.values(marks).reduce((a: any, b: any) => a + b, 0) as number;
+            const answers = (session?.answers as any) || {};
+            const marks = answers._internal_marks || {};
+            finalScore = Object.values(marks).reduce((a: any, b: any) => a + b, 0) as number;
         }
 
         await this.prisma.examSession.update({
             where: { id: sessionId },
-            data: { 
-                status: 'COMPLETED', 
+            data: {
+                status: 'COMPLETED',
                 endTime: new Date(),
                 score: finalScore
             }
         });
+
+        // Trigger analytics updates
+        if (session) {
+            await this.studentAnalyticsQueue.add('update-streak', { userId: session.userId });
+        }
     }
 }

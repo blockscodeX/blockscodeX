@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { siteConfig } from "@/app/config/site";
 import Link from "next/link";
 import { Search, Filter, Shield, BookOpen, MoreVertical, Play, Eye, Edit3, CheckCircle2, AlertCircle, Users, Activity, UserPlus, Lock } from "lucide-react";
 import CourseDetailsView from "@/app/components/Features/Courses/CourseDetailsView";
@@ -172,7 +173,7 @@ export default function AdminExamsView({ basePath = '/dashboard/admin', organiza
                                                     </div>
                                                     <div className="flex flex-col">
                                                         <p className="text-xs font-black text-slate-700 leading-none mb-0.5">{ex.creator?.name || 'System Admin'}</p>
-                                                        <p className="text-[9px] font-bold text-slate-400 lowercase">{ex.creator?.email || 'admin@blockscode.com'}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 lowercase">{ex.creator?.email || siteConfig.contactEmail}</p>
                                                     </div>
                                                 </div>
                                             </td>
@@ -231,7 +232,7 @@ export default function AdminExamsView({ basePath = '/dashboard/admin', organiza
                                                     </div>
                                                     <div className="flex flex-col">
                                                         <p className="text-xs font-black text-slate-700 leading-none mb-0.5">{cr.creator?.name || 'System Admin'}</p>
-                                                        <p className="text-[9px] font-bold text-slate-400 lowercase">{cr.creator?.email || 'admin@blockscode.com'}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 lowercase">{cr.creator?.email || siteConfig.contactEmail}</p>
                                                     </div>
                                                 </div>
                                             </td>

@@ -3,13 +3,16 @@ import { PrismaService } from '../../services/prisma/prisma.service';
 import { ExamService } from '../exam/exam.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class StudentService {
     constructor(
         private prisma: PrismaService,
         private examService: ExamService,
-        @InjectRedis() private readonly redis: Redis
+        @InjectRedis() private readonly redis: Redis,
+        @InjectQueue('student-analytics') private studentAnalyticsQueue: Queue
     ) { }
 
     async getStats(userId: string) {
@@ -20,10 +23,21 @@ export class StudentService {
             return JSON.parse(cached);
         }
 
-        // Calculate completed exams
-        const completedSessions = await this.prisma.examSession.count({
-            where: { userId, status: 'COMPLETED' }
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                // @ts-ignore
+                dailyStreak: true,
+                // @ts-ignore
+                totalXP: true,
+                unitSubmissions: {
+                    where: { status: 'COMPLETED' },
+                    select: { id: true }
+                }
+            }
         });
+
+        if (!user) throw new Error('User not found');
 
         // Calculate average score - only from published results
         const sessionsWithScore = await this.prisma.examSession.findMany({
@@ -38,14 +52,11 @@ export class StudentService {
         const totalScore = sessionsWithScore.reduce((acc: number, curr: any) => acc + (curr.score || 0), 0);
         const averageScore = sessionsWithScore.length > 0 ? Math.round(totalScore / sessionsWithScore.length) : 0;
 
-        // Calculate daily streak
-        const streak = await this.calculateDailyStreak(userId);
-
         const stats = {
-            completedModules: completedSessions,
+            completedModules: (user as any).unitSubmissions.length,
             averageScore,
-            streak,
-            totalXP: completedSessions * 100 // Mock XP
+            streak: (user as any).dailyStreak,
+            totalXP: (user as any).totalXP
         };
 
         // Cache for 60 seconds (short lived)
@@ -139,8 +150,6 @@ export class StudentService {
 
     async getCourses(userId: string) {
         // Get courses the student is enrolled in
-        // Note: Implicitly isolated via enrollment, but could add orgId check if needed.
-        // For now, assume enrollment implies access.
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
             include: {
@@ -148,32 +157,43 @@ export class StudentService {
                     include: {
                         modules: {
                             include: {
-                                units: {
-                                    select: { id: true }
-                                }
+                                units: { select: { id: true } }
                             }
                         },
-                        tests: true
+                        tests: { select: { id: true, title: true, slug: true, startDate: true, endDate: true } }
                     }
-                },
-                unitSubmissions: {
-                    where: { status: 'COMPLETED' },
-                    select: { unitId: true }
                 }
             }
         });
 
         if (!user) return [];
 
-        // Calculate progress for each course
-        return user.courses.map((course: any) => {
+        // Collect every unit ID across all enrolled courses in one pass
+        const allUnitIds = (user as any).courses.flatMap((course: any) =>
+            course.modules.flatMap((mod: any) => mod.units.map((u: any) => u.id))
+        );
+
+        // Single query: all completed submissions for this student across all enrolled units
+        const completedSubs = allUnitIds.length > 0
+            ? await this.prisma.unitSubmission.findMany({
+                where: { userId, unitId: { in: allUnitIds }, status: 'COMPLETED' },
+                select: { unitId: true }
+            })
+            : [];
+
+        const completedSet = new Set(completedSubs.map((s: any) => s.unitId));
+
+        return (user as any).courses.map((course: any) => {
             const totalUnits = course.modules.reduce((sum: number, mod: any) => sum + mod.units.length, 0);
-            const totalTests = (course as any).tests?.length || 0;
-            const completedUnitIds = new Set(user.unitSubmissions.map((sub: any) => sub.unitId));
-            const completedCount = course.modules.reduce((sum: number, mod: any) =>
-                sum + mod.units.filter((u: any) => completedUnitIds.has(u.id)).length, 0
-            );
+            const courseUnitIds = course.modules.flatMap((mod: any) => mod.units.map((u: any) => u.id));
+            const completedCount = courseUnitIds.filter((uid: string) => completedSet.has(uid)).length;
             const percent = totalUnits > 0 ? Math.round((completedCount / totalUnits) * 100) : 0;
+            const status =
+                completedCount === totalUnits && totalUnits > 0
+                    ? 'Completed'
+                    : completedCount > 0
+                    ? 'In Progress'
+                    : 'Not Started';
 
             return {
                 id: course.id,
@@ -181,15 +201,9 @@ export class StudentService {
                 title: course.title,
                 description: course.shortDescription,
                 sections: totalUnits,
-                testCount: totalTests,
-                tests: ((course as any).tests || []).map((t: any) => ({
-                    id: t.id,
-                    title: t.title,
-                    slug: t.slug,
-                    startDate: t.startDate,
-                    endDate: t.endDate
-                })),
-                status: completedCount === totalUnits ? 'Completed' : completedCount > 0 ? 'In Progress' : 'Not Started',
+                testCount: course.tests?.length || 0,
+                tests: course.tests || [],
+                status,
                 percent
             };
         });
@@ -301,7 +315,7 @@ export class StudentService {
                     testCases = contentObj.testCases;
                 }
             }
-            
+
             // Fallback logic
             if (testCases === '-' && sub.score !== null) {
                 testCases = sub.score === 100 ? '1 / 1' : '0 / 1';
@@ -345,10 +359,22 @@ export class StudentService {
             orderBy: { createdAt: 'desc' }
         });
 
-        // Calculate weekly activity (last 7 days)
+        // Calculate weekly activity (last 7 days) via database queries instead of memory filtering
         const weeklyActivity = [];
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const today = new Date();
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 6);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
+        // Fetch ONLY submissions from the last 7 days for the activity graph
+        const recentSubmissions = await this.prisma.unitSubmission.findMany({
+            where: {
+                userId,
+                createdAt: { gte: sevenDaysAgo }
+            },
+            select: { createdAt: true, status: true }
+        });
 
         for (let i = 6; i >= 0; i--) {
             const date = new Date(today);
@@ -358,7 +384,7 @@ export class StudentService {
             const nextDate = new Date(date);
             nextDate.setDate(nextDate.getDate() + 1);
 
-            const daySubmissions = submissions.filter((s: any) => {
+            const daySubmissions = recentSubmissions.filter((s: any) => {
                 const subDate = new Date(s.createdAt);
                 return subDate >= date && subDate < nextDate;
             });
@@ -414,7 +440,7 @@ export class StudentService {
 
         // Cache result for 5 minutes
         await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 300);
-        
+
         return result;
     }
 
@@ -563,7 +589,7 @@ export class StudentService {
     }
 
     async submitUnit(userId: string, unitId: string, data: { status: string; content: any; score?: number }) {
-        return this.prisma.unitSubmission.create({
+        const submission = await this.prisma.unitSubmission.create({
             data: {
                 userId,
                 unitId,
@@ -572,6 +598,24 @@ export class StudentService {
                 score: data.score
             }
         });
+
+        // Trigger analytics updates
+        await this.studentAnalyticsQueue.add('update-streak', { userId });
+        await this.studentAnalyticsQueue.add('update-course-progress', { userId, unitId });
+        await this.studentAnalyticsQueue.add('save-question-attempt', {
+            userId,
+            itemId: unitId,
+            type: 'UNIT',
+            content: data.content,
+            isCorrect: data.status === 'COMPLETED',
+            score: data.score
+        });
+
+        // Invalidate cache
+        await this.redis.del(`student:stats:${userId}`);
+        await this.redis.del(`student:analytics:${userId}`);
+
+        return submission;
     }
 
     async getCourseProgress(userId: string, courseSlug: string) {
@@ -621,7 +665,7 @@ export class StudentService {
             if (!attemptsMap[sub.unitId]) {
                 attemptsMap[sub.unitId] = [];
             }
-            
+
             let testCases = '-';
             if (sub.content && typeof sub.content === 'object' && !Array.isArray(sub.content)) {
                 const contentObj = sub.content as any;

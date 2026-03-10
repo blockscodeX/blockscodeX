@@ -1,5 +1,7 @@
 "use client"
 
+import { siteConfig } from "./config/site"
+
 import { motion, useInView } from "motion/react"
 import { useRef, useState } from "react"
 import {
@@ -182,11 +184,11 @@ function SlideOne() {
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
               />
-              <div className="relative w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg sm:rounded-xl flex items-center justify-center">
-                <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+              <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center bg-white rounded-lg sm:rounded-xl shadow-sm">
+                <img src={siteConfig.logo} alt={siteConfig.name} className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
               </div>
             </div>
-            <h3 className="text-blue-600 text-lg sm:text-2xl font-semibold">BlocksCode</h3>
+            <h3 className="text-blue-600 text-lg sm:text-2xl font-semibold">{siteConfig.name}</h3>
           </motion.div>
 
           {/* Main Heading - adjusted mobile size */}
@@ -856,19 +858,19 @@ function SlideThree() {
                       repeat: Number.POSITIVE_INFINITY,
                     }}
                   />
-                  <div className="relative w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg flex items-center justify-center shadow-md">
-                    <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                  <div className="relative w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-lg flex items-center justify-center shadow-md p-1">
+                    <img src={siteConfig.logo} alt={siteConfig.name} className="w-full h-full object-contain" />
                   </div>
                 </div>
                 <div className="text-left">
-                  <h4 className="text-gray-900 text-sm sm:text-base font-semibold">BlocksCode</h4>
+                  <h4 className="text-gray-900 text-sm sm:text-base font-semibold">{siteConfig.company}</h4>
                   <p className="text-gray-500 text-[10px] sm:text-xs">Enterprise Education Platform</p>
                 </div>
               </motion.div>
 
               {/* Copyright & Social */}
               <div className="flex items-center gap-3 sm:gap-4">
-                <p className="text-gray-400 text-xs">&copy; 2025 BlocksCode</p>
+                <p className="text-gray-400 text-xs">&copy; {new Date().getFullYear()} {siteConfig.company}</p>
 
                 <motion.a
                   href="/contact"

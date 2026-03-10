@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/app/components/Navbar';
-import Loading from '@/app/loading';
+import CoursePlayerSkeleton from '@/app/components/Skeletons/CoursePlayerSkeleton';
 import UnitRenderer, { UnitQuestion } from '@/app/components/UnitRenderer';
 import UnitNavHeader from '@/app/components/UnitNavHeader';
 import UnitSidebar from '@/app/components/UnitSidebar';
@@ -41,7 +41,7 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
                 // But if we want to show the list, we'd switch. 
                 // Usually "view attempt" means see the code/answer.
                 // UnitRenderer uses `selectedAttemptId` to show read-only view in the main area.
-                setActiveTab('question'); 
+                setActiveTab('question');
             }
         }
     }, [attemptIdParam, attempts]);
@@ -57,17 +57,17 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
                 ]);
                 setCurrentQuestion(unitData as UnitQuestion);
                 setIsBookmarked(bookmarks.some((b: any) => b.unitId === id));
-                
+
                 // Process attempts to extract testCases from content if needed
                 const processedAttempts = attemptsData.map((a: any) => {
                     let testCases = a.testCases;
                     let content = a.content;
-                    
+
                     // If content is an object (Prisma JSON), check for testCases inside
                     if (!testCases && content && typeof content === 'object' && !Array.isArray(content)) {
                         if (content.testCases) testCases = content.testCases;
                     }
-                    
+
                     return { ...a, testCases };
                 });
                 setAttempts(processedAttempts);
@@ -162,7 +162,7 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
                     score = data.score;
                     content = data.code;
                     testCases = data.testCases;
-                    
+
                     // Check completion based on test cases
                     if (typeof testCases === 'string') {
                         const [passed, total] = testCases.split('/').map(s => parseInt(s.trim()));
@@ -196,7 +196,7 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
             } as any);
             // Refresh attempts
             const newAttempts = await StudentService.getUnitSubmissions(id);
-            
+
             // Process new attempts same as initial load
             const processedAttempts = newAttempts.map((a: any) => {
                 let tc = a.testCases;
@@ -206,7 +206,7 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
                 }
                 return { ...a, testCases: tc };
             });
-            
+
             setAttempts(processedAttempts);
             showSuccess('submitted answer..', 'Success');
         } catch (error) {
@@ -221,26 +221,26 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
 
         const hasCodeBlocks = currentQuestion.readingContent?.some((b: any) => b.type === 'code' || b.codeConfig);
         if (!hasCodeBlocks) {
-             const isCompleted = attempts.some(a => a.status === 'COMPLETED');
-             if (!isCompleted) {
-                 handleSubmit('READING_COMPLETED');
-             }
+            const isCompleted = attempts.some(a => a.status === 'COMPLETED');
+            if (!isCompleted) {
+                handleSubmit('READING_COMPLETED');
+            }
         }
     }, [currentQuestion, attempts]);
 
     const handleCodeBlockRun = (blockId: string) => {
         if (!currentQuestion || currentQuestion.type !== 'Reading') return;
-        
+
         setExecutedBlocks(prev => {
             const next = new Set(prev).add(blockId);
-            
+
             // Check completion
             const codeBlocks = currentQuestion.readingContent?.filter((b: any) => b.type === 'code' || b.codeConfig) || [];
             if (codeBlocks.length > 0 && codeBlocks.every((b: any) => next.has(b.id))) {
-                 const isCompleted = attempts.some(a => a.status === 'COMPLETED');
-                 if (!isCompleted) {
-                     handleSubmit('READING_ALL_BLOCKS_RUN');
-                 }
+                const isCompleted = attempts.some(a => a.status === 'COMPLETED');
+                if (!isCompleted) {
+                    handleSubmit('READING_ALL_BLOCKS_RUN');
+                }
             }
             return next;
         });
@@ -484,11 +484,11 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
             navigateToUnit(prevModule.units[0].id);
         }
     };
-    if (loading) return <Loading />;
+    if (loading) return <CoursePlayerSkeleton hasSidebar={true} isExamMode={false} />;
 
     if (!currentQuestion) {
         return (
-            <div className="h-screen flex flex-col bg-white overflow-hidden">
+            <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
                 <Navbar />
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-lg font-bold text-red-400">Unit not found</div>

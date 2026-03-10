@@ -5,7 +5,7 @@ import WebEditor from "@/app/components/WebEditor/WebEditor";
 
 export default function WebPlaygroundPage() {
     return (
-        <div className="h-screen flex flex-col bg-white overflow-hidden">
+        <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
             <Navbar />
             <div className="flex-1 overflow-hidden relative">
                 <WebEditor

@@ -27,7 +27,7 @@ export const AuthService = {
     async login(email: string, password: string): Promise<any> {
         // This should technically not be used directly anymore in favor of Server Action
         // But if used, it will route through proxy
-         try {
+        try {
             const res = await fetch(`${BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -38,12 +38,12 @@ export const AuthService = {
                 const error = await res.json();
                 throw new Error(error.message || 'Login failed');
             }
-             
+
             // We rely on the Proxy/Server Action to set the cookie.
             // But this specific client-side call via Proxy might fail to set cookie 
             // because Proxy forwards response. 
             // IMPORTANT: Login SHOULD be done via Server Action (actions/auth.ts).
-            
+
             const data = await res.json();
             return data;
         } catch (error) {
@@ -79,9 +79,9 @@ export const AuthService = {
                 ...this.getUser(),
                 ...userData
             }));
-            
+
             sessionCache.set('me', userData);
-            
+
             return userData;
         } catch (error) {
             console.error('[AuthService] Session check skipped (offline or error)');
@@ -128,17 +128,32 @@ export const AuthService = {
         return res.json();
     },
 
-    async updateProfile(data: { name?: string; profilePicture?: File }): Promise<any> {
+    async uploadAvatar(file: File): Promise<any> {
         const formData = new FormData();
-        
-        if (data.name) formData.append('name', data.name);
-        if (data.profilePicture) formData.append('profilePicture', data.profilePicture);
+        formData.append('avatar', file);
 
+        const res = await fetch(`${BASE_URL}/auth/profile/avatar`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData,
+        });
+
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.message || 'Failed to upload avatar');
+        }
+
+        const updatedUser = await res.json();
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        return updatedUser;
+    },
+
+    async updateProfile(data: { name?: string }): Promise<any> {
         const res = await fetch(`${BASE_URL}/auth/profile`, {
             method: 'PATCH',
-            // Do NOT set Content-Type for FormData, browser sets it with boundary
+            headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: formData
+            body: JSON.stringify({ name: data.name }),
         });
 
         if (!res.ok) {
@@ -148,6 +163,22 @@ export const AuthService = {
 
         const updatedUser = await res.json();
         // Update local session
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        return updatedUser;
+    },
+
+    async removeProfilePicture(): Promise<any> {
+        const res = await fetch(`${BASE_URL}/auth/profile/picture`, {
+            method: 'DELETE',
+            credentials: 'include',
+        });
+
+        if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.message || 'Failed to remove profile picture');
+        }
+
+        const updatedUser = await res.json();
         localStorage.setItem('user', JSON.stringify(updatedUser));
         return updatedUser;
     },

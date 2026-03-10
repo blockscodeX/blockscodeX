@@ -1,7 +1,8 @@
+import { siteConfig } from "@/app/config/site";
+
 export const BRAND = {
-    name: "Blocks",
-    suffix: "Code",
-    logoText: "CB",
-    // Set logoImage to a path (e.g., "/logo.png") to use an image instead of text
-    logoImage: null,
+    name: siteConfig.name,
+    suffix: "",
+    logoText: "BX",
+    logoImage: siteConfig.logo,
 };

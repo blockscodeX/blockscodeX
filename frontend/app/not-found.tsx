@@ -5,7 +5,7 @@ import { BRAND } from './constants/brand';
 
 export default function NotFound() {
     return (
-        <div className="h-screen w-full bg-white overflow-hidden flex flex-col font-inter">
+        <div className="h-screen w-full bg-white overflow-hidden flex flex-col font-sans">
             {/* Header / Logo */}
             <div className="w-full px-6 py-6 md:px-12">
                 <div className="flex items-center gap-2.5">

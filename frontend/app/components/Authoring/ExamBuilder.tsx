@@ -7,9 +7,11 @@ import { Course as Exam, Section, Question } from "./types";
 import QuestionBuilder from "./QuestionBuilder/QuestionBuilder";
 import RichTextEditor from "./RichTextEditor";
 import Navbar from "@/app/components/Navbar";
+import { siteConfig } from "@/app/config/site";
 import StudentPreview from "./StudentPreview";
 import AlertModal from "../Common/AlertModal";
 import { useToast } from "../Common/Toast";
+import AiExamBuilderModal from "./AiExamBuilderModal";
 
 export default function ExamBuilder({ initialData, onDelete, basePath, userRole, orgPermissions = { allowAppExams: true, allowAIProctoring: true }, organizationId }: { initialData?: Partial<Exam>, onDelete?: () => void, basePath?: string, userRole?: 'admin' | 'teacher' | 'super-admin', orgPermissions?: { allowAppExams?: boolean, allowAIProctoring?: boolean }, organizationId?: string }) {
     const { success } = useToast();
@@ -38,30 +40,7 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
     const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile' | null>(null);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean, title: string, message: string, type?: 'danger' | 'warning' | 'info', onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
-
-    // Persistence: Load from localStorage on mount
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const key = initialData?.id ? `exam_builder_draft_${initialData.id}` : 'exam_builder_draft_new';
-            const saved = localStorage.getItem(key);
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    // If editing an existing exam, only load if the saved draft is newer or user confirms?
-                    // For now, we'll just load it if it exists, assuming it's the user's latest work.
-                    // But we must be careful not to overwrite initialData if initialData is actually fresher (fetched from DB).
-                    // A simple heuristic: if initialData is provided, we might ignore localStorage unless we track timestamps.
-                    // However, the user specifically asked for persistence "when refreshed".
-                    // So we should load it.
-                    
-                    // Merge with initialData to ensure we have all fields
-                    setExam(prev => ({ ...prev, ...parsed }));
-                } catch (e) {
-                    console.error("Failed to load draft", e);
-                }
-            }
-        }
-    }, []);
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
     // Persistence: Save to localStorage on change
     useEffect(() => {
@@ -213,8 +192,14 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                     </button>
                 </div>
 
-                {/* Right Actions */}
                 <div className="flex items-center justify-end gap-3 w-1/3">
+                    <button
+                        onClick={() => setIsAiModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--brand-light)]/30 text-[var(--brand)] hover:bg-[var(--brand-light)]/50 rounded-xl transition-all text-xs font-black uppercase tracking-widest"
+                    >
+                        <Sparkles size={16} />
+                        AI Generate
+                    </button>
                     {onDelete && (
                         <button
                             onClick={() => setAlertConfig({
@@ -560,13 +545,32 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Allowed IP Addr</label>
-                                                <button className="text-[8px] font-black uppercase text-[var(--brand)] hover:underline">Copy My IP</button>
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch('https://api.ipify.org?format=json');
+                                                            const data = await res.json();
+                                                            setExam(prev => {
+                                                                const currentIps = prev.allowedIPs ? prev.allowedIPs.trim() : '';
+                                                                const newIps = currentIps ? `${currentIps}, ${data.ip}` : data.ip;
+                                                                return { ...prev, allowedIPs: newIps };
+                                                            });
+                                                            success("IP Address copied and added!", "Success");
+                                                        } catch (err) {
+                                                            console.error("Failed to fetch IP", err);
+                                                            alert("Failed to fetch your IP address");
+                                                        }
+                                                    }}
+                                                    className="text-[8px] font-black uppercase text-[var(--brand)] hover:underline"
+                                                >
+                                                    Copy My IP
+                                                </button>
                                             </div>
                                             <input
                                                 type="text"
                                                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-600 outline-none focus:border-[var(--brand-light)] transition-all font-mono"
-                                                placeholder="e.g. 192.168.1.1"
-                                                value={exam.allowedIPs}
+                                                placeholder="e.g. 192.168.1.1, 10.0.0.1"
+                                                value={exam.allowedIPs || ''}
                                                 onChange={(e) => setExam(prev => ({ ...prev, allowedIPs: e.target.value }))}
                                             />
                                         </div>
@@ -591,7 +595,7 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                                                     <Share2 size={16} />
                                                 </button>
                                             </div>
-                                            <p className="text-[9px] font-bold text-[var(--brand)] truncate">blockscode.me/invite/{exam.inviteToken || 'xqoto373'}</p>
+                                            <p className="text-[9px] font-bold text-[var(--brand)] truncate">{siteConfig.domain}/invite/{exam.inviteToken || 'xqoto373'}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -723,6 +727,22 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                     setAlertConfig(prev => ({ ...prev, isOpen: false }));
                 }}
                 onCancel={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+            />
+            <AiExamBuilderModal
+                isOpen={isAiModalOpen}
+                onClose={() => setIsAiModalOpen(false)}
+                onGenerateFull={(data, tokenUsage) => {
+                    setExam(prev => ({
+                        ...prev,
+                        title: data.title || prev.title,
+                        longDescription: data.description || prev.longDescription,
+                        sections: data.sections,
+                        aiTokensUsed: (prev.aiTokensUsed || 0) + (tokenUsage?.totalTokens || 0)
+                    }));
+                    if (data.sections.length > 0) {
+                        setActiveSectionId(data.sections[0].id);
+                    }
+                }}
             />
         </div>
     );

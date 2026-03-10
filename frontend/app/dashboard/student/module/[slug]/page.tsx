@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { CourseService } from '@/services/api/CourseService';
 import { StudentService } from '@/services/api/StudentService';
 
@@ -116,7 +116,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
       description,
       difficulty: content.difficulty || undefined,
       topic: content.topic || undefined,
-      codingConfig: (function() {
+      codingConfig: (function () {
         const cc = content.codingConfig || content.codeConfig || content.coding || undefined;
         if (!cc) return undefined;
         const templates = cc.templates || cc.templatesMap || {};
@@ -135,7 +135,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
           allowedLanguages
         };
       })(),
-      webConfig: (function() {
+      webConfig: (function () {
         const wc = content.webConfig || content.web || undefined;
         if (!wc) return undefined;
         return {
@@ -148,7 +148,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
       })(),
       mcqOptions: Array.isArray(content.options) ? content.options.map((o: any) => ({ id: o.id, text: o.text })) : (Array.isArray(content.mcqOptions) ? content.mcqOptions.map((o: any) => ({ id: o.id, text: o.text })) : []),
       readingContent,
-      notebookConfig: (function() { const nb = content.notebookConfig || content.notebook || undefined; if (!nb) return undefined; return { initialCode: nb.initialCode || nb.initial_code || '', language: nb.language || 'python' }; })(),
+      notebookConfig: (function () { const nb = content.notebookConfig || content.notebook || undefined; if (!nb) return undefined; return { initialCode: nb.initialCode || nb.initial_code || '', language: nb.language || 'python' }; })(),
       // Provide moduleUnits for sidebar navigation (if available)
       moduleUnits: (selectedModule && Array.isArray(selectedModule.units)) ? selectedModule.units : [],
       moduleTitle: selectedModule?.title || course?.title || undefined
@@ -207,7 +207,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
     return () => { mounted = false; };
   }, [slug]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loading /></div>;
+  if (loading) return <DashboardSkeleton type="list" userRole="student" />;
   if (error) {
     const is404 = typeof error === 'string' && error.includes('status: 404');
     return (
@@ -290,34 +290,35 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
                   const isCompleted = totalCount > 0 && completedCount === totalCount;
 
                   return (
-                  <div
-                    key={m.id}
-                    onClick={() => setActiveModuleIndex(i)}
-                    className={`min-w-[240px] max-w-[240px] h-[170px] cursor-pointer snap-start rounded-[24px] border-2 p-6 transition-all duration-300 relative flex flex-col justify-between ${activeModuleIndex === i ? 'bg-white border-[var(--brand)] shadow-2xl shadow-[var(--brand)]/10' : 'bg-white border-slate-100 hover:border-slate-200'}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-colors ${activeModuleIndex === i ? 'bg-[var(--brand-light)] text-[var(--brand)]' : 'bg-slate-50 text-slate-400'}`}>
-                        {isCompleted ? (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-emerald-500"><polyline points="20 6 9 17 4 12" /></svg>
-                        ) : (
-                          i + 1
-                        )}
+                    <div
+                      key={m.id}
+                      onClick={() => setActiveModuleIndex(i)}
+                      className={`min-w-[240px] max-w-[240px] h-[170px] cursor-pointer snap-start rounded-[24px] border-2 p-6 transition-all duration-300 relative flex flex-col justify-between ${activeModuleIndex === i ? 'bg-white border-[var(--brand)] shadow-2xl shadow-[var(--brand)]/10' : 'bg-white border-slate-100 hover:border-slate-200'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-colors ${activeModuleIndex === i ? 'bg-[var(--brand-light)] text-[var(--brand)]' : 'bg-slate-50 text-slate-400'}`}>
+                          {isCompleted ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-emerald-500"><polyline points="20 6 9 17 4 12" /></svg>
+                          ) : (
+                            i + 1
+                          )}
+                        </div>
+                        {isCompleted && <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-md">Completed</span>}
                       </div>
-                      {isCompleted && <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-md">Completed</span>}
-                    </div>
 
-                    <h4 className={`font-black text-[15px] leading-snug line-clamp-2 ${activeModuleIndex === i ? 'text-slate-900' : 'text-slate-600'}`}>{m.title}</h4>
+                      <h4 className={`font-black text-[15px] leading-snug line-clamp-2 ${activeModuleIndex === i ? 'text-slate-900' : 'text-slate-600'}`}>{m.title}</h4>
 
-                    <div className="flex items-center justify-between text-[10px] font-black text-slate-400 border-t border-slate-50 pt-3">
-                      <div className="flex items-center gap-2 uppercase tracking-tighter">
-                        {totalCount} Lessons
-                      </div>
-                      <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full bg-[var(--brand)] transition-all opacity-30 ${activeModuleIndex === i ? 'opacity-100' : ''}`} style={{ width: `${progressPercent}%` }}></div>
+                      <div className="flex items-center justify-between text-[10px] font-black text-slate-400 border-t border-slate-50 pt-3">
+                        <div className="flex items-center gap-2 uppercase tracking-tighter">
+                          {totalCount} Lessons
+                        </div>
+                        <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full bg-[var(--brand)] transition-all opacity-30 ${activeModuleIndex === i ? 'opacity-100' : ''}`} style={{ width: `${progressPercent}%` }}></div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )})}
+                  )
+                })}
               </div>
 
               <CardNav direction="right" onClick={() => scroll('right', scrollRef)} />
@@ -328,41 +329,41 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
               {(selectedModule?.units || []).map((u: any, uIdx: number) => {
                 const isCompleted = progressData?.completedUnitIds.includes(u.id);
                 return (
-                <div key={u.id} className="group">
-                  <div
-                    className={`px-8 py-5 rounded-[24px] border transition-all cursor-pointer flex items-center justify-between bg-white border-slate-100/80 hover:border-slate-300/50`}
-                  >
+                  <div key={u.id} className="group">
                     <div
-                      onClick={() => router.push(`/dashboard/student/unit/${u.id}`)}
-                      className="flex items-center gap-10 flex-1"
+                      className={`px-8 py-5 rounded-[24px] border transition-all cursor-pointer flex items-center justify-between bg-white border-slate-100/80 hover:border-slate-300/50`}
                     >
-                      <div className={`text-xs font-black w-6 text-center transition-colors text-slate-300`}>
-                        {isCompleted ? (
-                          <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                          </div>
-                        ) : (
-                          uIdx + 1
-                        )}
+                      <div
+                        onClick={() => router.push(`/dashboard/student/unit/${u.id}`)}
+                        className="flex items-center gap-10 flex-1"
+                      >
+                        <div className={`text-xs font-black w-6 text-center transition-colors text-slate-300`}>
+                          {isCompleted ? (
+                            <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            </div>
+                          ) : (
+                            uIdx + 1
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">{u.type}</p>
+                          <h3 className={`text-[15px] font-bold transition-colors text-slate-700`}>{u.title || `Lesson ${uIdx + 1}`}</h3>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">{u.type}</p>
-                        <h3 className={`text-[15px] font-bold transition-colors text-slate-700`}>{u.title || `Lesson ${uIdx + 1}`}</h3>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/student/unit/${u.id}`); }}
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-[var(--brand)] hover:bg-[var(--brand-lighter)]"
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
-                        </button>
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/student/unit/${u.id}`); }}
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-[var(--brand)] hover:bg-[var(--brand-lighter)]"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
                 );
               })}
             </div>
@@ -593,8 +594,8 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
                               </div>
                               <div className="space-y-4">
                                 {q.attempts.map((attempt: any, idx: number) => (
-                                  <div 
-                                    key={idx} 
+                                  <div
+                                    key={idx}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       // Extract unit ID from q.id (format: L-unitId or T-testId-unitId)

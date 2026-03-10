@@ -9,6 +9,7 @@ import Navbar from "@/app/components/Navbar";
 import StudentPreview from "./StudentPreview";
 import AlertModal from "../Common/AlertModal";
 import { useToast } from "../Common/Toast";
+import AiCourseBuilderModal from "./AiCourseBuilderModal";
 
 export default function CourseBuilder({ initialData, onDelete, onSave, basePath, userRole, orgPermissions = { allowCourseTests: true }, organizationId }: { initialData?: Course, onDelete?: () => void, onSave?: (data: any) => Promise<void>, basePath?: string, userRole?: 'admin' | 'teacher' | 'super-admin', orgPermissions?: { allowCourseTests?: boolean }, organizationId?: string }) {
     const { success } = useToast();
@@ -38,6 +39,7 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
     const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile' | null>(null);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean, title: string, message: string, type?: 'danger' | 'warning' | 'info', onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
     // Persistence: Load from localStorage on mount
     useEffect(() => {
@@ -258,8 +260,14 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
                     </button>
                 </div>
 
-                {/* Right Actions */}
                 <div className="flex items-center justify-end gap-3 w-1/3">
+                    <button
+                        onClick={() => setIsAiModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--brand-light)]/30 text-[var(--brand)] hover:bg-[var(--brand-light)]/50 rounded-xl transition-all text-xs font-black uppercase tracking-widest"
+                    >
+                        <Sparkles size={16} />
+                        AI Generate
+                    </button>
                     {onDelete && (
                         <button
                             onClick={() => setAlertConfig({
@@ -636,6 +644,23 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
                     setAlertConfig(prev => ({ ...prev, isOpen: false }));
                 }}
                 onCancel={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+            />
+            <AiCourseBuilderModal
+                isOpen={isAiModalOpen}
+                onClose={() => setIsAiModalOpen(false)}
+                onGenerateFull={(data, tokenUsage) => {
+                    setCourse(prev => ({
+                        ...prev,
+                        title: data.title || prev.title,
+                        shortDescription: data.shortDescription || prev.shortDescription,
+                        sections: data.sections,
+                        courseSummary: data.summary,
+                        aiTokensUsed: (prev.aiTokensUsed || 0) + (tokenUsage?.totalTokens || 0)
+                    }));
+                    if (data.sections.length > 0) {
+                        setActiveSectionId(data.sections[0].id);
+                    }
+                }}
             />
         </div>
     );

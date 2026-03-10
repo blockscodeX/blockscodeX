@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 import { PrismaService } from '../../services/prisma/prisma.service';
@@ -31,17 +31,17 @@ export class ExamService {
         // PERFORMANCE: Check Cache
         const cacheKey = `exam:lookup:${slug}`;
         const cached = await this.redis.get(cacheKey);
-        
+
         let foundData = cached ? JSON.parse(cached) : null;
-        
+
         if (!foundData) {
             // Lightweight lookup for Start Session
             // 1. Exam
             const exam = await this.prisma.exam.findUnique({
-                 where: { slug },
-                 select: { id: true, orgId: true, isActive: true }
+                where: { slug },
+                select: { id: true, orgId: true, isActive: true, allowedIPs: true }
             });
-            
+
             if (exam) {
                 foundData = { ...exam, type: 'exam' };
             } else {
@@ -50,7 +50,7 @@ export class ExamService {
                     where: { slug },
                     select: { id: true, course: { select: { orgId: true } } }
                 });
-                
+
                 if (test) {
                     foundData = { id: test.id, orgId: test.course?.orgId, type: 'test' };
                 } else {
@@ -91,18 +91,33 @@ export class ExamService {
 
         if (entity) {
             // ISOLATION CHECK from Cached Data
-             if (user && user.role !== 'SUPER_ADMIN') {
+            if (user && user.role !== 'SUPER_ADMIN') {
                 if (entity.orgId && entity.orgId !== user.orgId) {
                     throw new NotFoundException('Assessment not found or access denied');
                 }
-             }
-             return this.transformExam(entity);
+            }
+            return this.transformExam(entity);
         }
 
-        // 1. Try finding in Standalone Exams
-        const exam = await this.prisma.exam.findUnique({
-            where: { slug, isActive: true },
-        });
+        // 1. Try finding all at once using Promise.all to reduce latency
+        const [exam, courseTest, course] = await Promise.all([
+            this.prisma.exam.findUnique({
+                where: { slug, isActive: true },
+            }),
+            this.prisma.courseTest.findUnique({
+                where: { slug },
+                include: { course: true }
+            }),
+            this.prisma.course.findUnique({
+                where: { slug },
+                include: {
+                    modules: {
+                        include: { units: true },
+                        orderBy: { order: 'asc' }
+                    }
+                }
+            })
+        ]);
 
         if (exam) {
             // Cache before check
@@ -110,24 +125,12 @@ export class ExamService {
 
             // ISOLATION CHECK
             if (user && user.role !== 'SUPER_ADMIN') {
-                // If exam has Org, User must match. 
-                // If exam has NO Org (legacy/global), maybe allow? 
-                // Requirement implies strictness. Let's assume content SHOULD have org.
                 if (exam.orgId && exam.orgId !== user.orgId) {
                     throw new NotFoundException('Assessment not found or access denied');
                 }
-                // If exam has no orgId, it's global? Allow for now or restrict?
-                // Safer to allow global content if it exists.
             }
-
             return this.transformExam(exam);
         }
-
-        // 2. Try finding in Course Tests
-        const courseTest = await this.prisma.courseTest.findUnique({
-            where: { slug },
-            include: { course: true }
-        });
 
         if (courseTest) {
             const mappedTest = { ...courseTest, orgId: courseTest.course.orgId };
@@ -145,20 +148,8 @@ export class ExamService {
             const transformed = this.transformCourseTest(courseTest);
             // Add startTime for frontend timer calculation
             (transformed as any).startTime = courseTest.startDate || courseTest.createdAt;
-            console.log('Transformed CourseTest:', JSON.stringify(transformed, null, 2));
             return transformed;
         }
-
-        // 3. Try finding in Courses (Curriculum mode)
-        const course = await this.prisma.course.findUnique({
-            where: { slug },
-            include: {
-                modules: {
-                    include: { units: true },
-                    orderBy: { order: 'asc' }
-                }
-            }
-        });
 
         if (course) {
             // ISOLATION CHECK
@@ -173,16 +164,29 @@ export class ExamService {
         throw new NotFoundException('Assessment not found');
     }
 
-    async getPublicStatus(slug: string) {
-        console.log(`[ExamService] Checking public status for slug: ${slug}`);
-        
+    async getPublicStatus(slug: string, ip?: string) {
+        console.log(`[ExamService] Checking public status for slug: ${slug}, ip: ${ip}`);
+
         const exam = await this.prisma.exam.findUnique({
             where: { slug, isActive: true },
-            select: { title: true, startTime: true, duration: true, id: true, questions: true, totalMarks: true }
+            select: { title: true, startTime: true, duration: true, id: true, questions: true, totalMarks: true, allowedIPs: true }
         });
 
         if (exam) {
-             console.log(`[ExamService] Found Exam: ${exam.title}`);
+            console.log(`[ExamService] Found Exam: ${exam.title}`);
+
+            if (exam.allowedIPs && exam.allowedIPs.trim().length > 0 && ip) {
+                const allowedList = exam.allowedIPs.split(',').map((i: string) => i.trim());
+                const cleanIp = ip.replace(/^::ffff:/, '');
+                const isAllowed = allowedList.some((allowedIp: string) =>
+                    allowedIp === cleanIp || allowedIp === ip
+                );
+
+                if (!isAllowed) {
+                    throw new UnauthorizedException('Access denied: Your IP address is not whitelisted for this exam');
+                }
+            }
+
             const rawQuestions: any = exam.questions || {};
             let totalQuestions = 0;
             let totalSections = 0;
@@ -221,7 +225,7 @@ export class ExamService {
         });
 
         if (courseTest) {
-             console.log(`[ExamService] Found CourseTest: ${courseTest.title}`);
+            console.log(`[ExamService] Found CourseTest: ${courseTest.title}`);
             let duration = 60;
             if (courseTest.startDate && courseTest.endDate) {
                 const diffMs = courseTest.endDate.getTime() - courseTest.startDate.getTime();
@@ -507,22 +511,22 @@ export class ExamService {
                 }
 
                 // CHECK FEEDBACK STATUS
-            const feedbackRecord = await this.prisma.feedback.findFirst({
-                where: { userId, examId }
-            });
+                const feedbackRecord = await this.prisma.feedback.findFirst({
+                    where: { userId, examId }
+                });
 
-            // Add violation counts to existing object
-            (existing as any).tabSwitchOutCount = existing.violations.filter((v: any) => v.type === 'TAB_SWITCH' || v.type === 'TAB_SWITCH_OUT').length;
-            (existing as any).tabSwitchInCount = existing.violations.filter((v: any) => v.type === 'TAB_SWITCH_IN').length;
-            (existing as any).feedbackDone = !!feedbackRecord;
-            return existing;
-        }
+                // Add violation counts to existing object
+                (existing as any).tabSwitchOutCount = existing.violations.filter((v: any) => v.type === 'TAB_SWITCH' || v.type === 'TAB_SWITCH_OUT').length;
+                (existing as any).tabSwitchInCount = existing.violations.filter((v: any) => v.type === 'TAB_SWITCH_IN').length;
+                (existing as any).feedbackDone = !!feedbackRecord;
+                return existing;
+            }
 
-        console.log(`[ExamService] Creating new session for examId: ${examId}, userId: ${userId}`);
+            console.log(`[ExamService] Creating new session for examId: ${examId}, userId: ${userId}`);
 
-        return await this.prisma.examSession.create({
-            data: {
-                userId,
+            return await this.prisma.examSession.create({
+                data: {
+                    userId,
                     examId,
                     ipAddress: ip,
                     deviceId,
@@ -562,7 +566,7 @@ export class ExamService {
             } else if (Array.isArray(rawQuestions)) {
                 totalQuestions = rawQuestions.length;
             } else if (Object.keys(rawQuestions).length > 0) {
-                 totalQuestions = Object.keys(rawQuestions).length;
+                totalQuestions = Object.keys(rawQuestions).length;
             }
 
             return {
@@ -583,17 +587,17 @@ export class ExamService {
 
         // 2. Try CourseTest
         const test = await this.prisma.courseTest.findUnique({
-             where: { slug },
-             select: { id: true, title: true, slug: true, questions: true }
+            where: { slug },
+            select: { id: true, title: true, slug: true, questions: true }
         });
 
         if (test) {
-             // CourseTests don't have explicit 'isActive', assume date based or always active?
-             // Assuming active for now.
-             
+            // CourseTests don't have explicit 'isActive', assume date based or always active?
+            // Assuming active for now.
+
             let totalQuestions = 0;
             const rawQuestions: any = test.questions || {};
-             if (rawQuestions.sections && Array.isArray(rawQuestions.sections)) {
+            if (rawQuestions.sections && Array.isArray(rawQuestions.sections)) {
                 rawQuestions.sections.forEach((s: any) => {
                     if (Array.isArray(s.questions)) totalQuestions += s.questions.length;
                 });
@@ -601,12 +605,12 @@ export class ExamService {
                 totalQuestions = rawQuestions.length;
             }
 
-             return {
+            return {
                 quiz: {
                     id: test.id,
                     title: test.title,
                     slug: test.slug,
-                    isActive: true, 
+                    isActive: true,
                     duration: 3600, // Default or fetch start/end difference
                     totalQuestions
                 },

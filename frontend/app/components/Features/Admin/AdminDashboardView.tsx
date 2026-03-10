@@ -48,12 +48,12 @@ interface AdminDashboardViewProps {
 import { AdminService } from "@/services/api/AdminService";
 import { useEffect, useState } from "react";
 import { useQuery } from "@/hooks/useQuery";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 
 // ... (keep interface)
 
 export default function AdminDashboardView({ basePath = '/dashboard/admin', organizationId }: AdminDashboardViewProps) {
-    const { data: dashboardData, isLoading: loading} = useQuery(`admin-dashboard-${organizationId || 'default'}`, async () => {
+    const { data: dashboardData, isLoading: loading } = useQuery(`admin-dashboard-${organizationId || 'default'}`, async () => {
         const [stats, analytics, logs] = await Promise.all([
             AdminService.getStats(organizationId),
             AdminService.getAnalytics(organizationId),
@@ -66,7 +66,7 @@ export default function AdminDashboardView({ basePath = '/dashboard/admin', orga
     const analyticsData = dashboardData?.analytics;
 
     // Show loading ONLY if no data exists (first load)
-    if (loading && !statsData) return <Loading />;
+    if (loading && !statsData) return <DashboardSkeleton type="main" userRole="admin" noNavbar />;
 
     const stats = [
         { label: "Total Users", value: statsData?.totalUsers?.toString() || "0", change: "Total", icon: <Users size={20} />, color: "bg-[var(--brand-light)] text-[var(--brand)]" },

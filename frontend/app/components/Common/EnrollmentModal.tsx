@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useRef } from 'react';
+import { siteConfig } from '@/app/config/site';
 import { X, UserPlus, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { TeacherService } from '@/services/api/TeacherService';
 import { useToast } from './Toast';
@@ -54,7 +55,7 @@ export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId
 
         try {
             const result = await TeacherService.enrollByEmails(courseId, [email]);
-            
+
             // Check success based on summary (backend format)
             if (result.summary && result.summary.enrolled > 0) {
                 setSuccess(true);
@@ -108,7 +109,7 @@ export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId
 
             try {
                 const result = await TeacherService.enrollByEmails(courseId, emails);
-                
+
                 if (result.summary) {
                     setImportReport(result);
                     // Use 'enrolled' property from backend summary
@@ -285,7 +286,7 @@ export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId
 
                 {/* Footer Tip */}
                 <div className="px-8 py-4 bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">
-                    Secure Student Data Management • BlocksCode Authoring
+                    Secure Student Data Management • {siteConfig.name} Authoring
                 </div>
             </div>
 

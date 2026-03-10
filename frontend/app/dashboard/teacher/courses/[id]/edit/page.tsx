@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import CourseBuilder from "@/app/components/Authoring/CourseBuilder";
 import AlertModal from "@/app/components/Common/AlertModal";
 import { useToast } from "@/app/components/Common/Toast";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import React from "react";
 
 export default function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +50,7 @@ export default function EditCoursePage({ params }: { params: Promise<{ id: strin
         }
     };
 
-    if (loading) return <Loading />;
+    if (loading) return <DashboardSkeleton type="form" userRole="teacher" />;
     if (!course) return <div className="p-12 text-center font-black uppercase tracking-widest text-rose-500">Course Not Found</div>;
 
     return (

@@ -75,7 +75,7 @@ interface UnitRendererProps {
 
 import { CodeExecutionService } from '@/services/api/CodeExecutionService';
 
-export default function UnitRenderer({
+export function UnitRendererComponent({
     question,
     activeTab = 'question',
     onTabChange = () => { },
@@ -112,6 +112,8 @@ export default function UnitRenderer({
     questionTotalMarks
 }: UnitRendererProps) {
 
+    const purifyConfig = { ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] };
+
     const [isReadingFullScreen, setIsReadingFullScreen] = useState(false);
     const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -128,11 +130,11 @@ export default function UnitRenderer({
         if (typeof window !== 'undefined') {
             const key = `unit_lang_${question.id}`;
             const savedLang = localStorage.getItem(key);
-            
+
             const config = question.codingConfig;
             const defaultLang = config?.languageId ||
                 (config?.allowedLanguages && config.allowedLanguages[0]) ||
-                (config?.templates ? Object.keys(config.templates)[0] : null) || 
+                (config?.templates ? Object.keys(config.templates)[0] : null) ||
                 SUPPORTED_LANGUAGES[0].id;
 
             if (savedLang && (!config?.allowedLanguages || config.allowedLanguages.includes(savedLang))) {
@@ -270,7 +272,7 @@ export default function UnitRenderer({
                             <article className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-6 prose-p:text-slate-600 prose-headings:text-slate-800 prose-code:text-[var(--brand-dark)] prose-code:bg-[var(--brand-lighter)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-sm"
                                 style={{ fontSize: contentFontSize ? `${contentFontSize}px` : undefined }}
                             >
-                                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(question.description) }} />
+                                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(question.description, purifyConfig) }} />
 
                                 {/* Render Embedded Code Runner if config exists (Legacy/Fallback) */}
                                 {question.codingConfig && !question.readingContent && (
@@ -291,7 +293,19 @@ export default function UnitRenderer({
                                         {question.readingContent.map(block => (
                                             <div key={block.id}>
                                                 {block.type === 'text' ? (
-                                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(block.content || '') }} />
+                                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(block.content || '', purifyConfig) }} />
+                                                ) : block.type === 'video' ? (
+                                                    <div className="not-prose my-8">
+                                                        <video
+                                                            src={block.videoUrl}
+                                                            controls
+                                                            controlsList="nodownload"
+                                                            className="w-full rounded-2xl border border-slate-200 shadow-sm bg-black"
+                                                            style={{ maxHeight: '480px' }}
+                                                        >
+                                                            Your browser does not support the video tag.
+                                                        </video>
+                                                    </div>
                                                 ) : (
                                                     <div className="not-prose my-8">
                                                         <EmbeddedCodeRunner
@@ -484,7 +498,7 @@ export default function UnitRenderer({
                                                 {question.readingContent.map(block => (
                                                     <div key={block.id} className="mb-8">
                                                         {block.type === 'text' ? (
-                                                            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(block.content || '') }} />
+                                                            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(block.content || '', purifyConfig) }} />
                                                         ) : (
                                                             <div className="not-prose my-8">
                                                                 <EmbeddedCodeRunner
@@ -516,3 +530,27 @@ export default function UnitRenderer({
         </div>
     );
 }
+
+// Custom comparison function for React.memo to prevent re-rendering when parent functions change
+// but crucial data like the question or current answer hasn't changed.
+function arePropsEqual(prevProps: UnitRendererProps, nextProps: UnitRendererProps) {
+    // Re-render if the question changes
+    if (prevProps.question.id !== nextProps.question.id) return false;
+
+    // Re-render if the answer for THIS question changes
+    if (prevProps.currentAnswer !== nextProps.currentAnswer) return false;
+
+    // Fast-moving properties or view state changes
+    if (prevProps.activeTab !== nextProps.activeTab) return false;
+    if (prevProps.isMarkedForReview !== nextProps.isMarkedForReview) return false;
+    if (prevProps.isBookmarked !== nextProps.isBookmarked) return false;
+    if (prevProps.showSidebar !== nextProps.showSidebar) return false;
+    if (prevProps.selectedAttemptId !== nextProps.selectedAttemptId) return false;
+    if (prevProps.isExecuting !== nextProps.isExecuting) return false;
+    if (prevProps.contentFontSize !== nextProps.contentFontSize) return false;
+
+    // Otherwise, assume it's the same. (We ignore function references like onNext, onSubmit, which might change on every render in parent)
+    return true;
+}
+
+export default React.memo(UnitRendererComponent, arePropsEqual);

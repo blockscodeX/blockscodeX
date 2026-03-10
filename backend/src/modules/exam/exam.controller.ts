@@ -25,9 +25,9 @@ export class ExamController {
     }
 
     @Get(':slug/public-status')
-    async getPublicStatus(@Param('slug') slug: string) {
+    async getPublicStatus(@Param('slug') slug: string, @Req() req: any) {
         // console.log('[ExamController] getPublicStatus slug:', slug);
-        return this.examService.getPublicStatus(slug);
+        return this.examService.getPublicStatus(slug, req.ip);
     }
 
     @Get(':slug/check')
@@ -41,8 +41,8 @@ export class ExamController {
 
     // Protected Routes
     @UseGuards(JwtAuthGuard)
-    @Post(':slug/start')
-    async startExam(
+    @Post(':slug/enter')
+    async enterExam(
         @Param('slug') slug: string,
         @Body() body: { deviceId: string; userId?: string; tabId?: string; metadata?: any },
         @User() user: any,
@@ -52,20 +52,39 @@ export class ExamController {
             throw new UnauthorizedException('User ID required');
         }
 
+        if (user.role && user.role !== 'STUDENT') {
+            throw new UnauthorizedException('Only Student accounts can access exams.');
+        }
+
         // OPTIMIZATION: Use lightweight ID lookup instead of full transform
         const lookup: any = await this.examService.getExamIdBySlug(slug, user);
         console.log(`[ExamController] Lookup for slug ${slug}:`, lookup);
 
         if (!lookup || lookup.type !== 'exam') {
-             // If it's a test/course, we might need a different handling strategy.
-             // For now, fail gracefully rather than crashing with FK error.
-             throw new BadRequestException('Assessment type does not support live sessions');
+            throw new BadRequestException('Assessment type does not support live sessions');
         }
 
         const ip = req.ip;
 
-        // Pass userId, deviceId, tabId, and metadata to startSession
-        return this.examService.startSession(user.id, lookup.id, ip, body.deviceId, body.tabId, body.metadata);
+        if (lookup.allowedIPs && lookup.allowedIPs.trim().length > 0) {
+            const allowedList = lookup.allowedIPs.split(',').map((i: string) => i.trim());
+
+            // Clean up ipv6 formatting (::1) or ipv4 mapped formatting (::ffff:192.168.1.1)
+            const cleanIp = ip.replace(/^::ffff:/, '');
+            const isAllowed = allowedList.some((allowedIp: string) =>
+                allowedIp === cleanIp || allowedIp === ip
+            );
+
+            if (!isAllowed) {
+                throw new UnauthorizedException('Access denied: Your IP address is not whitelisted for this exam');
+            }
+        }
+
+        return {
+            exam: await this.examService.getExamBySlug(slug, user),
+            session: await this.examService.startSession(user.id, lookup.id, ip, body.deviceId, body.tabId, body.metadata),
+            status: 'ready'
+        };
     }
 
     @Post()

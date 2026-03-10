@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { siteConfig } from "@/app/config/site";
 import { Save, Globe2, Building2, MapPin, Mail, Phone, CreditCard, Shield, User, Smartphone, Map, Globe, Database, HardDrive, Layout, ChevronDown, Palette, Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -72,7 +73,7 @@ export default function CreateOrganizationView() {
         try {
             await SuperAdminService.createOrganization({
                 name: formData.name,
-                domain: formData.subdomain ? `${formData.subdomain}.blockscode.me` : undefined,
+                domain: formData.subdomain ? `${formData.subdomain}.${siteConfig.domain}` : undefined,
                 logo: formData.logo,
                 maxUsers: formData.maxUsers,
                 maxCourses: 10, // Default or map if exists
@@ -145,7 +146,7 @@ export default function CreateOrganizationView() {
                                             value={formData.subdomain}
                                             onChange={e => setFormData({ ...formData, subdomain: e.target.value })}
                                         />
-                                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase">.blockscode.me</span>
+                                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase">.{siteConfig.domain}</span>
                                     </div>
                                 </InputGroup>
                             </div>
@@ -429,7 +430,7 @@ export default function CreateOrganizationView() {
                                     </div>
                                     <div>
                                         <p className="text-lg font-black text-slate-900 leading-tight">{formData.name || "Organization Name"}</p>
-                                        <p className="text-xs font-bold text-slate-400 mt-1">{formData.subdomain ? `${formData.subdomain}.blockscode.me` : "subdomain.blockscode.me"}</p>
+                                        <p className="text-xs font-bold text-slate-400 mt-1">{formData.subdomain ? `${formData.subdomain}.${siteConfig.domain}` : `subdomain.${siteConfig.domain}`}</p>
                                     </div>
                                 </div>
 

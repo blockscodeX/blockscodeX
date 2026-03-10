@@ -91,11 +91,11 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
         } else {
             // Add default template
             const langConfig = PLAYGROUND_LANGUAGES.find(l => l.id === langId);
-            newTemplates[langId] = { 
-                head: langConfig?.header || '', 
-                body: langConfig?.initialBody || '', 
-                tail: langConfig?.footer || '', 
-                solution: '' 
+            newTemplates[langId] = {
+                head: langConfig?.header || '',
+                body: langConfig?.initialBody || '',
+                tail: langConfig?.footer || '',
+                solution: ''
             };
             setActiveLang(langId);
         }
@@ -162,7 +162,7 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
                                 </div>
                             );
                         })}
-                        
+
                         <div className="relative">
                             <select
                                 className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-500 hover:border-slate-300 outline-none cursor-pointer transition-all focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/10"
@@ -328,21 +328,6 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
 
                                         <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                                             <div className="flex items-center gap-6">
-                                                <label
-                                                    className="flex items-center gap-3 cursor-pointer group/toggle"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation(); // Prevent closing accordion
-                                                        updateTestCase(index, { isPublic: !tc.isPublic });
-                                                    }}
-                                                >
-                                                    <div className={`w-10 h-5 rounded-full relative transition-colors ${tc.isPublic ? 'bg-[var(--brand)]' : 'bg-slate-200'}`}>
-                                                        <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${tc.isPublic ? 'translate-x-5' : ''}`}></div>
-                                                    </div>
-                                                    <span className={`text-xs font-bold ${tc.isPublic ? 'text-[var(--brand)]' : 'text-slate-400'}`}>Public to Students</span>
-                                                </label>
-
-                                                <div className="h-4 w-[1px] bg-slate-200"></div>
-
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-xs font-bold text-slate-400">Points:</span>
                                                     <input

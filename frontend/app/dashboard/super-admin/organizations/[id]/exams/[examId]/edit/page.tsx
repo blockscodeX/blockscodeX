@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import ExamEditor from '@/app/components/Features/Exams/ExamEditor';
 import { TeacherService } from '@/services/api/TeacherService';
-import Loading from '@/app/loading';
+import DashboardSkeleton from '@/app/components/Skeletons/DashboardSkeleton';
 
 export default function SuperAdminOrganizationExamEdit({ params }: { params: Promise<{ id: string, examId: string }> }) {
     const { id, examId } = React.use(params);
@@ -25,7 +25,7 @@ export default function SuperAdminOrganizationExamEdit({ params }: { params: Pro
         load();
     }, [examId]);
 
-    if (loading) return <Loading />;
+    if (loading) return <DashboardSkeleton type="form" userRole="super-admin" />;
     if (error) return <div className="p-8 text-center text-red-500 font-bold">{error}</div>;
 
     return <ExamEditor initialData={exam} userRole="admin" basePath={`/dashboard/super-admin/organizations/${id}`} organizationId={id} />;

@@ -36,12 +36,17 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
             return;
         }
 
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : '';
+
         // Initialize Socket
         const socket = io(`${SOCKET_URL}/proctoring`, {
             transports: ['websocket'],
             reconnection: true,
             reconnectionAttempts: 5,
             withCredentials: true,
+            auth: {
+                token: token
+            }
         });
 
         socketRef.current = socket;
@@ -96,11 +101,11 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
 
         // Listen for explicit force terminate event
         socket.on('force_terminate', (data: any) => {
-             console.log('[Socket] Received force_terminate command');
-             isKicked.current = true;
-             socket.disconnect();
-             if (socketRef.current) socketRef.current.disconnect();
-             window.location.href = `/exam/login?slug=${examId}&error=terminated`;
+            console.log('[Socket] Received force_terminate command');
+            isKicked.current = true;
+            socket.disconnect();
+            if (socketRef.current) socketRef.current.disconnect();
+            window.location.href = `/exam/login?slug=${examId}&error=terminated`;
         });
 
 
@@ -118,6 +123,19 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
             socket.disconnect();
         };
     }, [examId, userId, toastError, identity]);
+
+    // WebSocket Heartbeat
+    useEffect(() => {
+        if (!activeSocket || !sessionId || isKicked.current) return;
+
+        const heartbeatInterval = setInterval(() => {
+            if (activeSocket.connected) {
+                activeSocket.emit('heartbeat', { sessionId, timestamp: Date.now() });
+            }
+        }, 30000);
+
+        return () => clearInterval(heartbeatInterval);
+    }, [activeSocket, sessionId]);
 
     const saveAnswer = useCallback((questionId: string, answer: any) => {
         if (!isKicked.current && socketRef.current?.connected && sessionId) {

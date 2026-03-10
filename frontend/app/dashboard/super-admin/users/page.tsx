@@ -1,9 +1,10 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Navbar from "@/app/components/Navbar";
+import { siteConfig } from "@/app/config/site";
 import { Search, Globe, Shield, Filter, Mail, Ban, CheckCircle2, MoreVertical, Building2, Users, UserCog, Trash2, Power, ChevronLeft, ChevronRight } from "lucide-react";
 import { SuperAdminService } from "@/services/api/SuperAdminService";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { useToast } from "@/app/components/Common/Toast";
 import AlertModal from "@/app/components/Common/AlertModal";
 
@@ -48,8 +49,8 @@ export default function SuperAdminUsersPage() {
                 setTotalPages(response.totalPages);
                 setTotalUsers(response.total);
             } else {
-                 // Fallback
-                setUsers(response); 
+                // Fallback
+                setUsers(response);
             }
         } catch (error) {
             console.error("Failed to fetch users", error);
@@ -97,7 +98,7 @@ export default function SuperAdminUsersPage() {
     // Removed client-side filtering
     // const filteredUsers = ...
 
-    if (loading && users.length === 0) return <Loading />;
+    if (loading && users.length === 0) return <DashboardSkeleton type="list" userRole="super-admin" />;
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans">
@@ -167,7 +168,7 @@ export default function SuperAdminUsersPage() {
                                         <td className="px-8 py-6">
                                             <div className="flex items-center gap-2 text-slate-600">
                                                 <Building2 size={14} className="text-slate-300" />
-                                                <span className="text-xs font-black uppercase tracking-wider">{u.organization?.name || 'BlocksCode (Global)'}</span>
+                                                <span className="text-xs font-black uppercase tracking-wider">{u.organization?.name || siteConfig.adminUserOrgFallback}</span>
                                             </div>
                                         </td>
                                         <td className="px-8 py-6">
@@ -215,7 +216,7 @@ export default function SuperAdminUsersPage() {
                         </p>
                     </div>
                 )}
-                
+
                 {/* Pagination */}
                 <div className="flex items-center justify-between mt-6">
                     <p className="text-xs font-bold text-slate-400">

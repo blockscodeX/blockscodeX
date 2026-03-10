@@ -6,6 +6,7 @@ import { PrismaService } from '../../services/prisma/prisma.service';
 import { MailService } from '../../services/mail.service';
 import { StorageService } from '../../services/storage/storage.service';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -31,13 +32,8 @@ export class AuthService {
             }
         });
 
-        console.log('[AuthService] validateUser called for:', email);
-        console.log('[AuthService] User found:', user ? 'Yes' : 'No');
-
-        if (user) {
-            console.log('[AuthService] User role:', user.role);
-            console.log('[AuthService] User orgId:', user.orgId);
-            console.log('[AuthService] Organization data:', user.organization);
+        if (!user) {
+            throw new UnauthorizedException('Invalid credentials');
         }
 
         // In a real app, use bcrypt.compare
@@ -83,7 +79,7 @@ export class AuthService {
             where: { id: user.id },
             select: { mustChangePassword: true, organization: { select: { features: true } } }
         });
-        
+
         const mustChangePassword = freshUser?.mustChangePassword ?? user.mustChangePassword;
         const features = freshUser?.organization?.features || user.organization?.features || {};
 
@@ -94,13 +90,15 @@ export class AuthService {
             mustChangePassword: mustChangePassword
         };
         return {
-            access_token: this.jwtService.sign(payload),
+            access_token: this.jwtService.sign(payload, { expiresIn: '24h' }),
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
                 role: user.role,
                 orgId: user.orgId,
+                rollNumber: user.rollNumber,
+                department: user.department,
                 profilePicture: user.profilePicture, // Include profile picture
                 features: features,
                 mustChangePassword: mustChangePassword,
@@ -172,7 +170,8 @@ export class AuthService {
             }
         }
 
-        if (password && !(await bcrypt.compare(password, user.password))) {
+        // SEC-H05 FIX: Password MUST be provided and must match
+        if (!password || !(await bcrypt.compare(password, user.password))) {
             throw new UnauthorizedException('Invalid password');
         }
 
@@ -188,6 +187,17 @@ export class AuthService {
     }
 
     async updateProfile(userId: string, data: { name?: string; profilePicture?: string }) {
+        // If uploading a new profile picture, delete the old one from S3
+        if (data.profilePicture) {
+            const existingUser = await this.prisma.user.findUnique({
+                where: { id: userId },
+                select: { profilePicture: true }
+            });
+            if (existingUser?.profilePicture) {
+                await this.storageService.deleteFile(existingUser.profilePicture);
+            }
+        }
+
         const updatedUser = await this.prisma.user.update({
             where: { id: userId },
             data: {
@@ -204,10 +214,38 @@ export class AuthService {
             }
         });
 
-        // Invalidate session cache to ensure next request gets fresh data (with new profile pic/name)
+        // Invalidate session cache to ensure next request gets fresh data
         const cacheKey = `user:session:${userId}`;
         await this.redis.del(cacheKey);
 
+        return updatedUser;
+    }
+
+    async removeProfilePicture(userId: string) {
+        // Fetch the current profile picture URL to delete from S3
+        const existingUser = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { profilePicture: true }
+        });
+
+        if (existingUser?.profilePicture) {
+            await this.storageService.deleteFile(existingUser.profilePicture);
+        }
+
+        const updatedUser = await this.prisma.user.update({
+            where: { id: userId },
+            data: { profilePicture: null },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                rollNumber: true,
+                profilePicture: true
+            }
+        });
+
+        await this.redis.del(`user:session:${userId}`);
         return updatedUser;
     }
 
@@ -244,7 +282,7 @@ export class AuthService {
             return { success: true, message: 'If your email is registered, you will receive a password reset link.' };
         }
 
-        const tempPassword = Math.random().toString(36).slice(-8);
+        const tempPassword = randomBytes(12).toString('base64url').slice(0, 12);
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
         await this.prisma.user.update({
@@ -257,11 +295,13 @@ export class AuthService {
 
         const orgName = user.organization?.name || 'BlocksCode';
         const primaryColor = user.organization?.primaryColor || '#fc751b';
+        const orgLogo = user.organization?.logo || undefined;
+        const orgDomain = user.organization?.domain || undefined;
 
         await this.mailService.sendPasswordResetEmail(
             { email: user.email, name: user.name || 'User' },
             tempPassword,
-            { name: orgName, primaryColor }
+            { name: orgName, primaryColor, logo: orgLogo, domain: orgDomain }
         );
 
         return { success: true, message: 'If your email is registered, you will receive a password reset link.' };

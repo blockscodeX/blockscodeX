@@ -470,5 +470,61 @@ export const TeacherService = {
             console.error('[TeacherService] Error', error);
             throw error;
         }
+    },
+
+    async generateCourseOutline(data: any) {
+        try {
+            const res = await authFetch('/ai/generate-course-outline', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to generate course outline');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async generateCourseFull(data: any) {
+        try {
+            const res = await authFetch('/ai/generate-course-full', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to generate full course');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async generateExamOutline(data: any) {
+        try {
+            const res = await authFetch('/ai/generate-exam-outline', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to generate exam outline');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async generateExamFull(data: any) {
+        try {
+            const res = await authFetch('/ai/generate-exam-full', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to generate full exam');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
     }
 };

@@ -1,8 +1,9 @@
-  "use client";
+"use client";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { BRAND } from "../constants/brand";
+import { siteConfig } from "@/app/config/site";
 import ImpersonationBanner from "./Common/ImpersonationBanner";
 import { AuthService } from "@/services/api/AuthService";
 import { useOrganization } from "../context/OrganizationContext";
@@ -52,9 +53,14 @@ export default function Navbar({ basePath, userRole: roleOverride, examConfig }:
   const [userData, setUserData] = useState<any>(null);
 
   useEffect(() => {
+    // Skip platform auth checks on exam routes (exam students use separate auth)
+    const isExamRoute = pathname?.startsWith('/exam/') && !pathname?.includes('/login');
+
     const user = AuthService.getUser();
     setUserData(user);
-    AuthService.checkSession().then(data => data && setUserData(data));
+    if (!isExamRoute) {
+      AuthService.checkSession().then(data => data && setUserData(data));
+    }
 
     const interval = setInterval(() => {
       const u = AuthService.getUser();
@@ -62,7 +68,9 @@ export default function Navbar({ basePath, userRole: roleOverride, examConfig }:
         const rolePath = u.role.toLowerCase().replace('_', '-');
         router.replace(`/dashboard/${rolePath}/profile`);
       }
-      AuthService.checkSession().then(data => data && setUserData(data));
+      if (!isExamRoute) {
+        AuthService.checkSession().then(data => data && setUserData(data));
+      }
     }, 5000);
 
     return () => clearInterval(interval);
@@ -73,7 +81,7 @@ export default function Navbar({ basePath, userRole: roleOverride, examConfig }:
     // However, we should still ensure localStorage is synced if we want persistence across pages.
     if (roleOverride) {
       if (roleOverride !== localStorage.getItem("user-role")) {
-         localStorage.setItem("user-role", roleOverride);
+        localStorage.setItem("user-role", roleOverride);
       }
       return;
     }
@@ -81,34 +89,34 @@ export default function Navbar({ basePath, userRole: roleOverride, examConfig }:
     // Dynamic Role Detection Strategy
     // 1. Check URL Path (strongest specific signal)
     if (pathname?.startsWith("/dashboard/super-admin")) {
-        setRoleState('super-admin');
-        localStorage.setItem("user-role", "super-admin");
-        return;
-    } 
+      setRoleState('super-admin');
+      localStorage.setItem("user-role", "super-admin");
+      return;
+    }
     if (pathname?.startsWith("/dashboard/admin")) {
-        setRoleState('admin');
-        localStorage.setItem("user-role", "admin");
-        return;
-    } 
+      setRoleState('admin');
+      localStorage.setItem("user-role", "admin");
+      return;
+    }
     if (pathname?.startsWith("/dashboard/teacher")) {
-        setRoleState('teacher');
-        localStorage.setItem("user-role", "teacher");
-        return;
+      setRoleState('teacher');
+      localStorage.setItem("user-role", "teacher");
+      return;
     }
     if (pathname?.startsWith("/dashboard/student")) {
-        setRoleState('student');
-        localStorage.setItem("user-role", "student");
-        return;
+      setRoleState('student');
+      localStorage.setItem("user-role", "student");
+      return;
     }
 
     // 2. Check Authenticated User Data (weak signal for generic pages)
     const user = AuthService.getUser();
     if (user?.role) {
-        // Map backend roles (TEACHER, SUPER_ADMIN) to frontend (teacher, super-admin)
-        const mappedRole = user.role.toLowerCase().replace('_', '-') as any;
-        setRoleState(mappedRole);
-        localStorage.setItem("user-role", mappedRole);
-        return;
+      // Map backend roles (TEACHER, SUPER_ADMIN) to frontend (teacher, super-admin)
+      const mappedRole = user.role.toLowerCase().replace('_', '-') as any;
+      setRoleState(mappedRole);
+      localStorage.setItem("user-role", mappedRole);
+      return;
     }
 
     // 3. Fallback to existing LocalStorage (weakest signal)
@@ -118,8 +126,8 @@ export default function Navbar({ basePath, userRole: roleOverride, examConfig }:
     }
   }, [pathname, roleOverride]);
 
-  const displayName = orgContext?.name || BRAND.name;
-  const displayLogo = orgContext?.logo || BRAND.logoImage;
+  const displayName = orgContext?.name || siteConfig.name;
+  const displayLogo = orgContext?.logo || siteConfig.logo;
   const showSuffix = !orgContext && !examConfig?.hideBrandSuffix; // Hide suffix if custom branding
 
   const isTeacher = role === 'teacher';

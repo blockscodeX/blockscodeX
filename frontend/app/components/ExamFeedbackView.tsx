@@ -30,7 +30,7 @@ export default function ExamFeedbackView({ onSubmitFeedback }: ExamFeedbackViewP
     };
 
     return (
-        <div className="w-full h-full bg-slate-50 flex flex-col font-inter overflow-hidden relative animate-in fade-in duration-500">
+        <div className="w-full h-full bg-slate-50 flex flex-col font-sans overflow-hidden relative animate-in fade-in duration-500">
             {/* Background Decoration */}
             <div className="absolute top-0 left-0 w-full h-64 bg-slate-100/50 -z-10 skew-y-2 origin-top-left transform" />
 

@@ -22,11 +22,11 @@ export function useElectronMonitoring(examId: string, studentId: string) {
                 console.warn('[ElectronMonitoring] Tab Switch (Electron):', data);
                 logViolation('TAB_SWITCH', `Tab switch detected via Electron`, data);
             }) : null;
-            
+
             // Listen for Proctoring Warnings
             const removeWarningListener = api.onProctoringWarning ? api.onProctoringWarning((_event: any, data: any) => {
-                 console.warn('[ElectronMonitoring] Proctoring Warning:', data);
-                 logEvent('proctor_warning', data.message || 'Proctoring Warning', data);
+                console.warn('[ElectronMonitoring] Proctoring Warning:', data);
+                logEvent('proctor_warning', data.message || 'Proctoring Warning', data);
             }) : null;
 
             return () => {
@@ -38,19 +38,7 @@ export function useElectronMonitoring(examId: string, studentId: string) {
         }
     }, [examId, studentId]);
 
-    useEffect(() => {
-        // Start Heartbeat - Simplified for Web
-        // In pure web, we rely on Socket, but if we need HTTP heartbeat:
-        heartbeatInterval.current = setInterval(() => {
-            MonitoringService.sendHeartbeat();
-        }, 30000); // 30s heartbeat
-
-        return () => {
-            if (heartbeatInterval.current) {
-                clearInterval(heartbeatInterval.current);
-            }
-        };
-    }, []);
+    // Heartbeat now managed via WebSockets in useExamSocket.ts
 
     const logEvent = (eventType: string, message: string, data?: any) => {
         const event: MonitoringEvent = {

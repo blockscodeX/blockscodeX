@@ -4,24 +4,24 @@ import Link from "next/link";
 import Navbar from "@/app/components/Navbar";
 import { StudentService, StudentModule, StudentStats } from "@/services/api/StudentService";
 import { requireAuthClient } from "@/hooks/requireAuthClient";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { useQuery } from "@/hooks/useQuery";
 import { useDebounce } from "@/hooks/useDebounce";
 
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  
+
   // Auth Check
   useEffect(() => { requireAuthClient("/login"); }, []);
 
   // Optimized Data Fetching with Cache
   const { data: dashboardData, isLoading: loading } = useQuery('student-dashboard', async () => {
-      const [stats, courses] = await Promise.all([
-          StudentService.getStats(),
-          StudentService.getCourses()
-      ]);
-      return { stats, courses };
+    const [stats, courses] = await Promise.all([
+      StudentService.getStats(),
+      StudentService.getCourses()
+    ]);
+    return { stats, courses };
   });
 
   const stats = dashboardData?.stats || null;
@@ -32,7 +32,7 @@ export default function DashboardPage() {
   );
 
   // Show loading only if no data at all (first load)
-  if (loading && !stats) return <Loading />;
+  if (loading && !stats) return <DashboardSkeleton type="main" userRole="student" />;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-orange-100 selection:text-orange-900">

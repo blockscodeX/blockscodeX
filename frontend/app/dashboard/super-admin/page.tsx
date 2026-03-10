@@ -5,7 +5,7 @@ import Navbar from "@/app/components/Navbar";
 import { Building2, Users, ShieldAlert, Globe, ArrowUpRight, Plus, Activity, Zap, Trash2 } from "lucide-react";
 import { SuperAdminService } from "@/services/api/SuperAdminService";
 import { requireAuthClient } from "@/hooks/requireAuthClient";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 
 export default function SuperAdminDashboardPage() {
     const [statsData, setStatsData] = useState<any>(null);
@@ -37,7 +37,7 @@ export default function SuperAdminDashboardPage() {
         { label: "System Alerts", value: statsData?.alerts?.toString() || "0", change: "None", icon: <ShieldAlert size={20} />, color: "bg-slate-50 text-slate-400" },
     ];
 
-    if (!authChecked || loading) return <Loading />;
+    if (!authChecked || loading) return <DashboardSkeleton type="main" userRole="super-admin" />;
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans">

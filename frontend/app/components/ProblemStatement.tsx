@@ -135,13 +135,12 @@ export default function ProblemStatement({
                     {/* Marks Badge */}
                     {marksObtained !== undefined && questionTotalMarks !== undefined && (
                         <div className="mb-4">
-                            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border ${
-                                marksObtained === questionTotalMarks 
-                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                    : marksObtained > 0 
+                            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border ${marksObtained === questionTotalMarks
+                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                    : marksObtained > 0
                                         ? 'bg-amber-50 text-amber-600 border-amber-100'
                                         : 'bg-rose-50 text-rose-600 border-rose-100'
-                            }`}>
+                                }`}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" /></svg>
                                 Marks: {marksObtained} / {questionTotalMarks}
                             </span>
@@ -155,7 +154,7 @@ export default function ProblemStatement({
                         className="space-y-6 text-slate-600 leading-relaxed"
                         style={{ fontSize: fontSize ? `${fontSize}px` : '15px' }}
                     >
-                        <div className="prose prose-slate max-w-none prose-p:text-inherit prose-headings:text-slate-800 prose-code:text-[var(--brand-dark)] prose-code:bg-[var(--brand-lighter)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-sm prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-100 prose-pre:overflow-x-auto prose-pre:max-w-full" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(description) }}></div>
+                        <div className="prose prose-slate max-w-none prose-p:text-inherit prose-headings:text-slate-800 prose-code:text-[var(--brand-dark)] prose-code:bg-[var(--brand-lighter)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-sm prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-100 prose-pre:overflow-x-auto prose-pre:max-w-full" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(description, { ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] }) }}></div>
 
                         <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-2xl">
                             <h3 className="text-slate-800 font-bold mb-3 flex items-center gap-2">

@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useOrganization } from '@/app/context/OrganizationContext';
 import Loading from '@/app/loading';
 import { examLoginAction } from '@/actions/examAuth';
+import { ExamService } from '@/services/api/ExamService';
 
 export default function ExamLoginPage() {
     const router = useRouter();
@@ -33,24 +34,24 @@ export default function ExamLoginPage() {
         if (slugFromQuery) {
             const fetchExam = async () => {
                 try {
-                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-                    const res = await fetch(`${baseUrl}/exam/${slugFromQuery}/public-status`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        setExamInfo(data);
+                    const data = await ExamService.getExamPublicStatus(slugFromQuery!);
+                    setExamInfo(data);
 
-                        // Check if exam hasn't started yet
-                        if (data.startTime) {
-                            const start = new Date(data.startTime).getTime();
-                            if (Date.now() < start) {
-                                router.push(`/exam/waiting?slug=${slugFromQuery}`);
-                                return; // Do NOT set isCheckingStatus to false, keep loading while redirecting
-                            }
+                    // Check if exam hasn't started yet
+                    if (data.startTime) {
+                        const start = new Date(data.startTime).getTime();
+                        if (Date.now() < start) {
+                            router.push(`/exam/waiting?slug=${slugFromQuery}`);
+                            return; // Do NOT set isCheckingStatus to false, keep loading while redirecting
                         }
                     }
                     setIsCheckingStatus(false);
-                } catch (err) {
-                    console.error("Failed to load exam metadata", err);
+                } catch (err: any) {
+                    if (err.status === 401 || err.message?.includes('401') || err.message?.includes('Access denied')) {
+                        setError('Network Not Allowed.');
+                    } else {
+                        setError('Failed to load exam information. Please check the URL or try again later.');
+                    }
                     setIsCheckingStatus(false);
                 }
             };
@@ -70,6 +71,10 @@ export default function ExamLoginPage() {
             setError('Your account has been suspended. Please contact the administrator.');
         } else if (errorType === 'terminated') {
             setError('Your exam session has been terminated by the administrator. Contact your teacher.');
+        } else if (errorType === 'ip_blocked') {
+            setError('Network Not Allowed.');
+        } else if (errorType === 'not_student') {
+            setError('Access Denied: Only Student accounts can access exams. Please log in with a student account or use an incognito window.');
         }
     }, [searchParams]);
 
@@ -83,13 +88,13 @@ export default function ExamLoginPage() {
         try {
             // Secure Server Action - Sets HttpOnly Cookie
             const result = await examLoginAction(email, testCode, password);
-            
+
             if (!result.success) {
                 throw new Error(result.error);
             }
 
             const data = result; // maintain structure
-            
+
             // Store user object for client-side context (ExamPage checks this)
             if (data.user) {
                 localStorage.setItem('user', JSON.stringify(data.user));
@@ -131,7 +136,7 @@ export default function ExamLoginPage() {
     }
 
     return (
-        <div className="h-screen w-full bg-slate-50 flex items-center justify-center font-inter overflow-hidden">
+        <div className="h-screen w-full bg-slate-50 flex items-center justify-center font-sans overflow-hidden">
             <div className="w-full h-full flex flex-col md:flex-row bg-white overflow-hidden shadow-2xl">
                 {/* Left Side: Login Form */}
                 <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center bg-white relative z-10">

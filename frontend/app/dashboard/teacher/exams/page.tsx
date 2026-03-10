@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/app/components/Navbar";
-import Loading from '@/app/loading';
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { Eye, Lock } from "lucide-react";
 import ExamDetailsModal from "@/app/components/Features/Exams/ExamDetailsModal";
 import { TeacherService } from "@/services/api/TeacherService";
@@ -73,7 +73,7 @@ export default function TeacherExamsPage() {
                 {/* EXAMS TABLE */}
                 <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
                     {loading ? (
-                        <Loading />
+                        <DashboardSkeleton type="list" userRole="teacher" noNavbar />
                     ) : filteredExams.length === 0 ? (
                         <div className="p-12 text-center text-slate-400 font-black uppercase tracking-widest">No Exams Found</div>
                     ) : (

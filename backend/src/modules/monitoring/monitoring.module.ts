@@ -4,8 +4,10 @@ import { MonitoringGateway } from './monitoring.gateway';
 
 import { SubmissionModule } from '../submission/submission.module';
 
+import { AuthModule } from '../auth/auth.module';
+
 @Module({
-  imports: [SubmissionModule],
+  imports: [SubmissionModule, AuthModule],
   controllers: [MonitoringController],
   providers: [MonitoringGateway],
   exports: [MonitoringGateway],

@@ -20,7 +20,7 @@ export default function ExamSuccessView({ userDetails, onDone }: ExamSuccessView
     const displayName = orgContext?.name || BRAND.name;
     const displayLogo = orgContext?.logo || BRAND.logoImage;
     return (
-        <div className="w-full h-full bg-white flex flex-col font-inter overflow-hidden relative animate-in fade-in duration-700">
+        <div className="w-full h-full bg-white flex flex-col font-sans overflow-hidden relative animate-in fade-in duration-700">
             {/* Success Background Elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-emerald-50 rounded-full blur-[120px] opacity-60" />

@@ -1,9 +1,10 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../services/prisma/prisma.service';
 import { MailService } from '../../services/mail.service';
 import * as bcrypt from 'bcrypt';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AdminService {
@@ -74,6 +75,8 @@ export class AdminService {
                 name: true,
                 role: true,
                 isActive: true,
+                rollNumber: true,
+                department: true,
                 createdAt: true,
                 orgId: true
             },
@@ -185,16 +188,14 @@ export class AdminService {
         });
     }
 
-    async toggleUserStatus(id: string) {
-        // Warning: This needs org check too, passed explicitly or we fetch user first
-        // Since controller doesn't pass user here yet, we should add it.
-        // For now, let's assume valid access or rely on user lookup
+    async toggleUserStatus(id: string, caller: any) {
         const user = await this.prisma.user.findUnique({ where: { id } });
         if (!user) throw new NotFoundException('User not found');
 
-        // Context: AdminService methods usually called with context. 
-        // We will skip strict check here but ideally we should checking requesting user's Org.
-        // Assuming AdminController will be updated to pass user here too.
+        // Enforce org isolation
+        if (caller.role !== 'SUPER_ADMIN' && user.orgId !== caller.orgId) {
+            throw new UnauthorizedException('Cannot modify a user outside of your organization');
+        }
 
         return this.prisma.user.update({
             where: { id },
@@ -225,8 +226,8 @@ export class AdminService {
             throw new ConflictException('User with this email already exists');
         }
 
-        // Generate a random 8-character password
-        const generatedPassword = Math.random().toString(36).slice(-8);
+        // Generate a random 12-character password securely
+        const generatedPassword = randomBytes(12).toString('base64url').slice(0, 12);
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
         const user = await this.prisma.user.create({
@@ -237,14 +238,15 @@ export class AdminService {
                 password: hashedPassword,
                 orgId: orgId, // ENFORCED
                 isActive: true,
-                rollNumber: customId || null
+                rollNumber: customId || null,
+                department: dept || null
             }
         });
 
         // Send welcome email (Non-blocking for performance)
         this.mailService.sendWelcomeEmail(
             { email: user.email, name: user.name || 'User', password: generatedPassword },
-            { name: org.name, primaryColor: org.primaryColor || undefined }
+            { name: org.name, primaryColor: org.primaryColor || undefined, logo: org.logo || undefined, domain: org.domain || undefined }
         ).catch(err => console.error(`[AdminService] Failed to send welcome email to ${email}:`, err));
 
         return {
@@ -254,6 +256,8 @@ export class AdminService {
                 name: user.name,
                 role: user.role,
                 isActive: user.isActive,
+                rollNumber: user.rollNumber,
+                department: user.department,
                 createdAt: user.createdAt
             },
             password: generatedPassword, // Return plain password for one-time display
@@ -262,25 +266,98 @@ export class AdminService {
     }
 
     async createUsersBulk(users: any[], currentUser?: any, targetOrgId?: string) {
-        const results = [];
-        let createdCount = 0;
-        let failedCount = 0;
-        let emailsSentCount = 0;
-        let emailsFailedCount = 0;
+        const orgId = this.getEffectiveOrgId(currentUser, targetOrgId);
 
-        for (const userData of users) {
-            try {
-                const result = await this.createUser(userData, currentUser, targetOrgId);
-                createdCount++;
-                if (result.emailSent) {
-                    emailsSentCount++;
-                } else {
-                    emailsFailedCount++;
-                }
-                results.push({ ...result, success: true });
-            } catch (err: any) {
+        // CHECK LIMITS
+        const org = await this.prisma.organization.findUnique({
+            where: { id: orgId },
+            include: { _count: { select: { users: true } } }
+        });
+
+        if (!org) throw new NotFoundException('Organization not found');
+
+        const remainingQuota = org.maxUsers - org._count.users;
+        if (remainingQuota < users.length) {
+            throw new BadRequestException(`Organization user limit reached. Can only add ${remainingQuota} more users.`);
+        }
+
+        const newUsersData: any[] = [];
+        const emailsToSend: any[] = [];
+        const results: any[] = [];
+
+        let failedCount = 0;
+        let createdCount = 0;
+
+        // Fetch existing users to avoid unique constraint violations in createMany
+        const existingEmails = new Set((await this.prisma.user.findMany({
+            where: { email: { in: users.map(u => u.email) } },
+            select: { email: true }
+        })).map(u => u.email));
+
+        for (const data of users) {
+            if (existingEmails.has(data.email)) {
+                results.push({ email: data.email, success: false, error: 'User already exists' });
                 failedCount++;
-                results.push({ email: userData.email, success: false, error: err.message });
+                continue;
+            }
+
+            const generatedPassword = randomBytes(12).toString('base64url').slice(0, 12);
+            const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+
+            newUsersData.push({
+                id: randomBytes(16).toString('hex'), // explicitly generate ID since createMany might not return it depending on DB
+                email: data.email,
+                name: data.name,
+                role: data.role ? data.role.toUpperCase() : 'STUDENT',
+                password: hashedPassword,
+                orgId: orgId,
+                isActive: true,
+                rollNumber: data.customId || data.id || null, // data.id is used by bulk import often
+                department: data.dept || data.department || null,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+
+            emailsToSend.push({
+                email: data.email,
+                name: data.name || 'User',
+                password: generatedPassword,
+                orgData: { name: org.name, primaryColor: org.primaryColor || undefined, logo: org.logo || undefined, domain: org.domain || undefined }
+            });
+        }
+
+        if (newUsersData.length > 0) {
+            try {
+                await this.prisma.user.createMany({
+                    data: newUsersData,
+                    skipDuplicates: true
+                });
+                createdCount = newUsersData.length;
+
+                // Add successes to results
+                newUsersData.forEach((u, i) => {
+                    results.push({
+                        success: true,
+                        user: {
+                            email: u.email,
+                            name: u.name,
+                            rollNumber: u.rollNumber,
+                            department: (u as any).department
+                        },
+                        password: emailsToSend[i].password,
+                        emailSent: true
+                    });
+                });
+
+                // Send emails asymptotically
+                emailsToSend.forEach(e => {
+                    this.mailService.sendWelcomeEmail(
+                        { email: e.email, name: e.name, password: e.password },
+                        e.orgData
+                    ).catch(err => console.error(`[AdminService] Bulk email failed for ${e.email}:`, err));
+                });
+            } catch (err: any) {
+                throw new BadRequestException(`Bulk insert failed: ${err.message}`);
             }
         }
 
@@ -289,15 +366,22 @@ export class AdminService {
                 totalProcessed: users.length,
                 created: createdCount,
                 failed: failedCount,
-                emailsSent: emailsSentCount,
-                emailsFailed: emailsFailedCount
+                emailsSent: createdCount, // Optimistic given async
+                emailsFailed: 0
             },
             details: results
         };
     }
 
-    async deleteUser(id: string) {
-        // Should verify user belongs to Org of requester?
+    async deleteUser(id: string, caller: any) {
+        const user = await this.prisma.user.findUnique({ where: { id } });
+        if (!user) throw new NotFoundException('User not found');
+
+        // Enforce org isolation
+        if (caller.role !== 'SUPER_ADMIN' && user.orgId !== caller.orgId) {
+            throw new UnauthorizedException('Cannot delete a user outside of your organization');
+        }
+
         console.log('[AdminService] Starting deletion for user:', id);
         try {
             const auditLogResult = await this.prisma.auditLog.deleteMany({

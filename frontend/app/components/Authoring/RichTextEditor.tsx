@@ -8,12 +8,13 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
+import Youtube from '@tiptap/extension-youtube';
 import {
     Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code as CodeIcon,
     List, ListOrdered, AlignLeft, AlignCenter, AlignRight, AlignJustify,
     Link as LinkIcon, Image as ImageIcon, Quote, Undo, Redo,
     Heading1, Heading2, Heading3, Subscript as SubIcon, Superscript as SupIcon,
-    Moon, Sun, Terminal, Code2
+    Moon, Sun, Terminal, Code2, Youtube as YoutubeIcon
 } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -25,10 +26,9 @@ interface RichTextEditorProps {
 export default function RichTextEditor({ content, onChange, placeholder }: RichTextEditorProps) {
     const [isDarkMode, setIsDarkMode] = useState(false);
 
-    // Unique instance id to avoid duplicate extension names across multiple editors (HMR / multiple instances)
-    const instanceId = React.useRef(Math.random().toString(36).slice(2, 9));
-    const linkName = `link_${instanceId.current}`;
-    const underlineName = `underline_${instanceId.current}`;
+    // Removed unique instance ID as it breaks Tiptap HTML serialization and standard commands.
+    const linkName = 'link';
+    const underlineName = 'underline';
 
     const _extensions = [
         StarterKit.configure({
@@ -43,23 +43,29 @@ export default function RichTextEditor({ content, onChange, placeholder }: RichT
                 },
             },
         }),
-        // use instance-specific names for underline to avoid cross-editor name collisions
-        Underline.extend({ name: underlineName }),
+        // Use standard Underline extension
+        Underline,
         Subscript,
         Superscript,
         TextAlign.configure({
             types: ['heading', 'paragraph'],
         }),
-        // configure Link then extend with an instance-specific name
+        // Configure Link
         Link.configure({
             openOnClick: false,
             HTMLAttributes: {
                 class: 'text-[var(--brand)] underline cursor-pointer hover:text-[var(--brand-dark)]',
             },
-        }).extend({ name: linkName }),
+        }),
         Image.configure({
             HTMLAttributes: {
                 class: 'rounded-2xl max-w-full h-auto my-4 shadow-lg',
+            },
+        }),
+        Youtube.configure({
+            inline: false,
+            HTMLAttributes: {
+                class: 'w-full aspect-video rounded-xl shadow-lg my-4 overflow-hidden border border-slate-200 dark:border-slate-700',
             },
         }),
     ];
@@ -114,6 +120,17 @@ export default function RichTextEditor({ content, onChange, placeholder }: RichT
         const url = window.prompt('Image URL');
         if (url) {
             editor.chain().focus().setImage({ src: url }).run();
+        }
+    };
+
+    const addYoutube = () => {
+        const url = window.prompt('YouTube URL');
+        if (url) {
+            editor.commands.setYoutubeVideo({
+                src: url,
+                width: Math.max(320, parseInt('100%', 10)) as any,
+                height: Math.max(180, parseInt('auto', 10)) as any,
+            });
         }
     };
 
@@ -281,6 +298,7 @@ export default function RichTextEditor({ content, onChange, placeholder }: RichT
                 <div className="flex bg-white/10 rounded-xl p-0.5 gap-0.5 shadow-inner">
                     <ToolbarBtn onClick={setLink} active={editor.isActive(linkName)} icon={<LinkIcon size={15} />} label="Link" dark={isDarkMode} />
                     <ToolbarBtn onClick={addImage} active={editor.isActive('image')} icon={<ImageIcon size={15} />} label="Image" dark={isDarkMode} />
+                    <ToolbarBtn onClick={addYoutube} active={editor.isActive('youtube')} icon={<YoutubeIcon size={15} />} label="YouTube Video" dark={isDarkMode} />
                 </div>
 
                 <div className="ml-auto flex items-center gap-2">

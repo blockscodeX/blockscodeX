@@ -75,7 +75,7 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
         }
 
         if (results.length === 0) return { avgScore: 0, avgTime: 0, passedCount: 0, failedCount: 0, distribution: [], highScore: 0 };
-        
+
         // Legacy fallback calculation
         const passedCount = results.filter(r => r.status === "Passed").length;
         const failedCount = results.filter(r => r.status === "Failed").length;
@@ -101,10 +101,14 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
     const brandColor = '#fc751b';
     const brandLightColor = 'var(--brand-light)';
 
-    const pieData = [
-        { name: 'Passed', value: stats.passedCount, color: brandColor },
-        { name: 'Failed', value: stats.failedCount, color: '#f43f5e' },
-    ];
+    const pieData = results.length > 0
+        ? [
+            { name: 'Passed', value: stats.passedCount, color: brandColor },
+            { name: 'Failed', value: stats.failedCount, color: '#f43f5e' },
+        ]
+        : [
+            { name: 'No Data', value: 1, color: '#f1f5f9' }
+        ];
 
     const handlePublish = async () => {
         setIsPublishing(true);
@@ -185,8 +189,8 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
                         <div className="h-40 w-full relative">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie data={pieData} innerRadius={50} outerRadius={70} paddingAngle={8} dataKey="value">
-                                        {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                    <Pie data={pieData} innerRadius={50} outerRadius={70} paddingAngle={results.length > 0 ? 8 : 0} dataKey="value" isAnimationActive={results.length > 0}>
+                                        {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}
                                     </Pie>
                                 </PieChart>
                             </ResponsiveContainer>
@@ -345,9 +349,9 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-right">
-                                            <Link href={basePath 
+                                            <Link href={basePath
                                                 ? `${basePath}/exams/${examId}/submission/${r.sessionId}/preview`
-                                                : (userRole === 'admin' 
+                                                : (userRole === 'admin'
                                                     ? `/dashboard/admin/exams/${examId}/submission/${r.sessionId}/preview`
                                                     : `/dashboard/teacher/exams/${examId}/submission/${r.sessionId}/preview`)
                                             }>
@@ -362,9 +366,9 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
                         </table>
                     </div>
                 </div>
-                
-                 {/* Pagination */}
-                 <div className="flex items-center justify-between mt-6">
+
+                {/* Pagination */}
+                <div className="flex items-center justify-between mt-6">
                     <p className="text-xs font-bold text-slate-400">
                         Page {pagination.page} of {pagination.totalPages} ({pagination.total} students)
                     </p>

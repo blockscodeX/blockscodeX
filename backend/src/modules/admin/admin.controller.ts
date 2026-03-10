@@ -61,15 +61,15 @@ export class AdminController {
     @Patch('users/:id/status')
     @UseGuards(OrgFeaturesGuard)
     @RequireOrgFeature('canManageUsers')
-    async toggleUserStatus(@Param('id') id: string) {
-        return this.adminService.toggleUserStatus(id);
+    async toggleUserStatus(@User() user: any, @Param('id') id: string) {
+        return this.adminService.toggleUserStatus(id, user);
     }
 
     @Delete('users/:id')
     @UseGuards(OrgFeaturesGuard)
     @RequireOrgFeature('canManageUsers')
-    async deleteUser(@Param('id') id: string) {
+    async deleteUser(@User() user: any, @Param('id') id: string) {
         console.log('[AdminController] Deleting user:', id);
-        return this.adminService.deleteUser(id);
+        return this.adminService.deleteUser(id, user);
     }
 }

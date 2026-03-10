@@ -13,17 +13,30 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 import { SubmissionService } from '../submission/submission.service';
 import { PrismaService } from '../../services/prisma/prisma.service';
+import { JwtService } from '@nestjs/jwt';
+import { WsException } from '@nestjs/websockets';
 
 @WebSocketGateway({
     namespace: 'proctoring',
-    cors: { origin: '*' }, // Allow Electron app
+    cors: {
+        origin: [
+            'http://localhost:3000',
+            'https://blockscode-production.vercel.app',
+            'tauri://localhost',
+            'http://localhost:1420',
+            'https://www.blockscode.me',
+            'https://blockscode.me'
+        ],
+        credentials: true
+    },
 })
 export class MonitoringGateway
     implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
     constructor(
         @InjectRedis() private readonly redis: Redis,
         private readonly submissionService: SubmissionService,
-        private readonly prisma: PrismaService
+        private readonly prisma: PrismaService,
+        private readonly jwtService: JwtService
     ) { }
 
     @WebSocketServer()
@@ -35,8 +48,31 @@ export class MonitoringGateway
         console.log('Proctoring Gateway initialized');
     }
 
-    handleConnection(client: Socket) {
-        console.log(`Client connected: ${client.id}`);
+    async handleConnection(client: Socket) {
+        try {
+            let cookieToken = null;
+            const cookieHeader = client.handshake.headers.cookie;
+            if (cookieHeader) {
+                const cookies = cookieHeader.split(';').reduce((acc: any, str: string) => {
+                    const [key, value] = str.split('=').map(s => s.trim());
+                    acc[key] = value;
+                    return acc;
+                }, {});
+                cookieToken = cookies['auth_token'];
+            }
+
+            const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1] || cookieToken;
+            if (!token) throw new Error('No token provided');
+
+            const payload = this.jwtService.verify(token);
+            // Optionally store the verified userId mapping:
+            // client.data.userId = payload.sub;
+
+            console.log(`Client connected and authenticated: ${client.id}`);
+        } catch (error) {
+            console.log(`Client connection rejected (unauthorized): ${client.id}`, error);
+            client.disconnect(true);
+        }
     }
 
     async handleDisconnect(client: Socket) {
@@ -44,7 +80,7 @@ export class MonitoringGateway
         if (meta) {
             this.activeConnections.delete(client.id);
             console.log(`Client disconnected: ${client.id} (User: ${meta.userId}, Exam: ${meta.examId})`);
-            
+
             // Notify teachers immediately
             this.server.to(`exam_${meta.examId}_monitor`).emit('student_status', {
                 userId: meta.userId,
@@ -122,6 +158,16 @@ export class MonitoringGateway
         return { status: 'saved' };
     }
 
+    @SubscribeMessage('heartbeat')
+    async handleHeartbeat(
+        @MessageBody() data: { sessionId: string; timestamp: number },
+        @ConnectedSocket() client: Socket,
+    ) {
+        // Can be used to track last seen timestamp in Redis for precise online status
+        // await this.redis.set(`session:last_seen:${data.sessionId}`, Date.now(), 'EX', 60);
+        return { status: 'alive' };
+    }
+
     @SubscribeMessage('log_violation')
     async handleLogViolation(
         @MessageBody() data: {
@@ -137,20 +183,20 @@ export class MonitoringGateway
         // PERFORMANCE: Check Cache for Session Status & Limits
         const cacheKey = `session:status:${data.sessionId}`;
         let cachedData = await this.redis.get(cacheKey);
-        
+
         // Parse cached data or init as null
         let sessionData: { status: string; tabSwitchLimit: number | null } = cachedData ? JSON.parse(cachedData) : null;
 
         if (!sessionData) {
             const examSession = await this.prisma.examSession.findUnique({
                 where: { id: data.sessionId },
-                select: { 
+                select: {
                     status: true,
                     exam: { select: { tabSwitchLimit: true } }
                 }
             });
             if (!examSession) {
-                 return { status: 'rejected', reason: 'Session not found' };
+                return { status: 'rejected', reason: 'Session not found' };
             }
             sessionData = {
                 status: examSession.status,
@@ -159,7 +205,7 @@ export class MonitoringGateway
             // Cache for short duration as status can change
             await this.redis.set(cacheKey, JSON.stringify(sessionData), 'EX', 60);
         }
-        
+
         const status = sessionData.status;
 
         // 1. BLOCK violations if session is already completed or terminated
@@ -182,69 +228,69 @@ export class MonitoringGateway
         // OPTIMIZATION: Use Redis Atomic Counters for Tab Switches
         const keyIn = `violation:count:in:${data.sessionId}`;
         const keyOut = `violation:count:out:${data.sessionId}`;
-        
+
         let tabSwitchInCount = 0;
         let tabSwitchOutCount = 0;
 
         if (data.type === 'TAB_SWITCH_IN') {
-             // Increment IN counter
-             // If key missing, we might need to init it. But INCR starts at 1 so it's safer to just rely on Redis if we assume consistency.
-             // However, upon restart Redis is empty. We need lazy loading.
-             
-             if (await this.redis.exists(keyIn)) {
-                 tabSwitchInCount = await this.redis.incr(keyIn);
-             } else {
-                 // Fetch initial count from DB
-                 const dbCount = await this.prisma.violation.count({
-                    where: { sessionId: data.sessionId, type: 'TAB_SWITCH_IN' } 
-                 });
-                 // dbCount includes the one we just created above? Yes, because we awaited create.
-                 await this.redis.set(keyIn, dbCount);
-                 tabSwitchInCount = dbCount;
-             }
-             
-             // Get OUT count without incrementing
-             const cachedOut = await this.redis.get(keyOut);
-             if (cachedOut) {
-                 tabSwitchOutCount = parseInt(cachedOut);
-             } else {
-                 tabSwitchOutCount = await this.prisma.violation.count({
-                    where: { sessionId: data.sessionId, type: { in: ['TAB_SWITCH', 'TAB_SWITCH_OUT'] } } 
-                 });
-                 await this.redis.set(keyOut, tabSwitchOutCount);
-             }
+            // Increment IN counter
+            // If key missing, we might need to init it. But INCR starts at 1 so it's safer to just rely on Redis if we assume consistency.
+            // However, upon restart Redis is empty. We need lazy loading.
+
+            if (await this.redis.exists(keyIn)) {
+                tabSwitchInCount = await this.redis.incr(keyIn);
+            } else {
+                // Fetch initial count from DB
+                const dbCount = await this.prisma.violation.count({
+                    where: { sessionId: data.sessionId, type: 'TAB_SWITCH_IN' }
+                });
+                // dbCount includes the one we just created above? Yes, because we awaited create.
+                await this.redis.set(keyIn, dbCount);
+                tabSwitchInCount = dbCount;
+            }
+
+            // Get OUT count without incrementing
+            const cachedOut = await this.redis.get(keyOut);
+            if (cachedOut) {
+                tabSwitchOutCount = parseInt(cachedOut);
+            } else {
+                tabSwitchOutCount = await this.prisma.violation.count({
+                    where: { sessionId: data.sessionId, type: { in: ['TAB_SWITCH', 'TAB_SWITCH_OUT'] } }
+                });
+                await this.redis.set(keyOut, tabSwitchOutCount);
+            }
 
         } else if (data.type === 'TAB_SWITCH' || data.type === 'TAB_SWITCH_OUT') {
-             // Increment OUT counter
-             if (await this.redis.exists(keyOut)) {
-                 tabSwitchOutCount = await this.redis.incr(keyOut);
-             } else {
-                 const dbCount = await this.prisma.violation.count({
-                    where: { sessionId: data.sessionId, type: { in: ['TAB_SWITCH', 'TAB_SWITCH_OUT'] } } 
-                 });
-                 await this.redis.set(keyOut, dbCount);
-                 tabSwitchOutCount = dbCount;
-             }
+            // Increment OUT counter
+            if (await this.redis.exists(keyOut)) {
+                tabSwitchOutCount = await this.redis.incr(keyOut);
+            } else {
+                const dbCount = await this.prisma.violation.count({
+                    where: { sessionId: data.sessionId, type: { in: ['TAB_SWITCH', 'TAB_SWITCH_OUT'] } }
+                });
+                await this.redis.set(keyOut, dbCount);
+                tabSwitchOutCount = dbCount;
+            }
 
-             // Get IN count without incrementing
-             const cachedIn = await this.redis.get(keyIn);
-             if (cachedIn) {
-                 tabSwitchInCount = parseInt(cachedIn);
-             } else {
-                 tabSwitchInCount = await this.prisma.violation.count({
-                    where: { sessionId: data.sessionId, type: 'TAB_SWITCH_IN' } 
-                 });
-                 await this.redis.set(keyIn, tabSwitchInCount);
-             }
+            // Get IN count without incrementing
+            const cachedIn = await this.redis.get(keyIn);
+            if (cachedIn) {
+                tabSwitchInCount = parseInt(cachedIn);
+            } else {
+                tabSwitchInCount = await this.prisma.violation.count({
+                    where: { sessionId: data.sessionId, type: 'TAB_SWITCH_IN' }
+                });
+                await this.redis.set(keyIn, tabSwitchInCount);
+            }
         } else {
             // For other violations, just fetch current counts if needed or return 0
             // Or fallback to checking DB if we really need them for the event
             // But usually we only send updated counts on tab switches.
-            
+
             // Just read cache or DB
             const cachedIn = await this.redis.get(keyIn);
             tabSwitchInCount = cachedIn ? parseInt(cachedIn) : await this.prisma.violation.count({ where: { sessionId: data.sessionId, type: 'TAB_SWITCH_IN' } });
-            
+
             const cachedOut = await this.redis.get(keyOut);
             tabSwitchOutCount = cachedOut ? parseInt(cachedOut) : await this.prisma.violation.count({ where: { sessionId: data.sessionId, type: { in: ['TAB_SWITCH', 'TAB_SWITCH_OUT'] } } });
         }
@@ -312,7 +358,7 @@ export class MonitoringGateway
         // 1. Broadcast error to student rooms (emit 'error' OR 'force_terminate' for robust handling)
         const studentRoom = `student_${userId}_exam_${examId}`;
         console.log(`[Proctoring] Force terminating user ${userId} in exam ${examId}`);
-        
+
         this.server.to(studentRoom).emit('error', {
             message: 'EXAM_TERMINATED'
         });

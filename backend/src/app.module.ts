@@ -19,6 +19,7 @@ import { CourseModule } from './modules/course/course.module';
 
 import { CodeExecutionModule } from './modules/code-execution/code-execution.module';
 import { BullModule } from '@nestjs/bullmq';
+import { AiModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -66,9 +67,9 @@ import { BullModule } from '@nestjs/bullmq';
             family: 4, // Force IPv4 to avoid dual-stack DNS lookups
           };
         } else {
-            connection.maxRetriesPerRequest = null;
-            connection.enableReadyCheck = false;
-            connection.family = 4;
+          connection.maxRetriesPerRequest = null;
+          connection.enableReadyCheck = false;
+          connection.family = 4;
         }
 
         return {
@@ -92,7 +93,8 @@ import { BullModule } from '@nestjs/bullmq';
     CourseModule,
     StudentModule,
     OrganizationModule,
-    CodeExecutionModule
+    CodeExecutionModule,
+    AiModule
   ],
   controllers: [AppController],
   providers: [

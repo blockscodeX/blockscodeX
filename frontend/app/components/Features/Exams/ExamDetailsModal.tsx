@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { Share2, Globe, Target, Clock, Shield, Copy, Layout, X } from "lucide-react";
+import { siteConfig } from "@/app/config/site";
 import AlertModal from "@/app/components/Common/AlertModal";
 
 interface ExamDetailsModalProps {
@@ -57,7 +58,7 @@ export default function ExamDetailsModal({ exam, onClose, userRole = 'teacher' }
                         <DetailCard
                             icon={<Globe size={18} />}
                             label="Public Exam URL"
-                            value={`blockscode.me/exam/${exam.slug}`}
+                            value={`${siteConfig.domain}/exam/${exam.slug}`}
                             type="link"
                             onAlert={setAlertConfig}
                             brandTextClass={brandTextClass}
@@ -65,7 +66,7 @@ export default function ExamDetailsModal({ exam, onClose, userRole = 'teacher' }
                         <DetailCard
                             icon={<Share2 size={18} />}
                             label="Invite Link"
-                            value={`blockscode.me/invite/${exam.inviteToken}`}
+                            value={`${siteConfig.domain}/invite/${exam.inviteToken}`}
                             type="link"
                             onAlert={setAlertConfig}
                             brandTextClass={brandTextClass}

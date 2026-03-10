@@ -1,10 +1,16 @@
-import { Controller, Request, Post, Patch, UseGuards, Body, Get, UnauthorizedException, Req, BadRequestException } from '@nestjs/common';
+import { Controller, Request, Post, Patch, Delete, UseGuards, Body, Get, UnauthorizedException, Req, BadRequestException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { User } from './user.decorator';
 import type { FastifyRequest } from 'fastify';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './roles.decorator';
+import { CreateUserDto } from './dto/create-user.dto';
 import { StorageService } from '../../services/storage/storage.service';
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 @Controller('auth')
 export class AuthController {
@@ -25,7 +31,10 @@ export class AuthController {
     }
 
     @Post('register')
-    async register(@Body() createUserDto: any) {
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('ADMIN', 'SUPER_ADMIN')
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    async register(@Body() createUserDto: CreateUserDto) {
         return this.authService.register(createUserDto);
     }
 
@@ -47,40 +56,52 @@ export class AuthController {
     }
 
     @UseGuards(JwtAuthGuard)
-    @Patch('profile')
-    async updateProfile(@User() user: any, @Req() req: FastifyRequest) {
-        const data: { name?: string; profilePicture?: string } = {};
+    @Post('profile/avatar')
+    async uploadAvatar(@User() user: any, @Req() req: FastifyRequest) {
         const multipartReq = req as any;
 
-        if (multipartReq.isMultipart()) {
-            const parts = multipartReq.parts();
-            for await (const part of parts) {
-                if (part.type === 'file') {
-                    // Upload to 'profilepic' bucket
-                    const url = await this.storageService.uploadFile(part, 'avatars', 'profilepic');
-                    data.profilePicture = url;
-                } else {
-                    if (part.fieldname === 'name') {
-                        // part.value is available for fields in @fastify/multipart?
-                        // Actually for fields, part is not the same object.
-                        // Wait, req.parts() yields parts.
-                        // If it's a field, it has value.
-                        // But @fastify/multipart documentation says:
-                        // for await (const part of req.parts()) {
-                        //   if (part.type === 'file') { ... } else { // part.type === 'field'
-                        //     console.log(part.fieldname, part.value)
-                        //   }
-                        // }
-                        data.name = (part as any).value as string;
-                    }
-                }
-            }
-        } else {
-            const body = req.body as { name?: string };
-            if (body?.name) data.name = body.name;
+        if (!multipartReq.isMultipart()) {
+            throw new BadRequestException('Request must be multipart/form-data');
         }
 
-        return this.authService.updateProfile(user.id, data);
+        const parts = multipartReq.parts();
+        for await (const part of parts) {
+            if (part.type === 'file' && part.fieldname === 'avatar') {
+                const buffer = await part.toBuffer();
+
+                if (buffer.length > MAX_FILE_SIZE) {
+                    throw new BadRequestException('File size must be less than 5MB');
+                }
+                if (!ALLOWED_IMAGE_TYPES.includes(part.mimetype)) {
+                    throw new BadRequestException('Only image files are allowed (JPEG, PNG, GIF, WebP, SVG)');
+                }
+
+                const fileObj = {
+                    filename: part.filename,
+                    mimetype: part.mimetype,
+                    toBuffer: async () => buffer,
+                };
+
+                const url = await this.storageService.uploadFile(fileObj, 'avatars');
+                return this.authService.updateProfile(user.id, { profilePicture: url });
+            } else if (part.type === 'file') {
+                await part.toBuffer(); // consume unused file parts
+            }
+        }
+
+        throw new BadRequestException('No avatar file provided');
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Patch('profile')
+    async updateProfile(@User() user: any, @Body() body: { name?: string }) {
+        return this.authService.updateProfile(user.id, { name: body?.name });
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Delete('profile/picture')
+    async removeProfilePicture(@User() user: any) {
+        return this.authService.removeProfilePicture(user.id);
     }
 
     @UseGuards(JwtAuthGuard)

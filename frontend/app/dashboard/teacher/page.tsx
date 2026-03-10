@@ -6,7 +6,7 @@ import EnrollmentModal from "@/app/components/Common/EnrollmentModal";
 import CourseDetailsView from "@/app/components/Features/Courses/CourseDetailsView";
 import { TeacherService } from "@/services/api/TeacherService";
 import { requireAuthClient } from "@/hooks/requireAuthClient";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { AuthService } from "@/services/api/AuthService";
 import { useQuery } from "@/hooks/useQuery";
 
@@ -22,7 +22,7 @@ export default function TeacherDashboardPage() {
     const [userData, setUserData] = useState<any>(null);
 
     // Auth
-    useEffect(() => { 
+    useEffect(() => {
         requireAuthClient("/login");
         setUserData(AuthService.getUser());
     }, []);
@@ -33,10 +33,10 @@ export default function TeacherDashboardPage() {
             TeacherService.getStats(),
             TeacherService.getRecentSubmissions()
         ]);
-        return { 
-            modules: modulesData, 
-            stats: statsData, 
-            recent: recentData 
+        return {
+            modules: modulesData,
+            stats: statsData,
+            recent: recentData
         };
     });
 
@@ -48,7 +48,7 @@ export default function TeacherDashboardPage() {
         .filter((m: any) => m.status === tab)
         .filter((m: any) => m.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    if (loading && !stats) return <Loading />;
+    if (loading && !stats) return <DashboardSkeleton type="main" userRole="teacher" />;
 
     const canCreateCourses = userData?.features?.canCreateCourses !== false;
 

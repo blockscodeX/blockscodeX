@@ -43,8 +43,9 @@ export interface Question {
     readingConfig?: {
         contentBlocks: {
             id: string;
-            type: 'text' | 'code-runner';
+            type: 'text' | 'code-runner' | 'video';
             content: string; // HTML for text blocks
+            videoUrl?: string; // S3 URL for video blocks
             runnerConfig?: {
                 language: 'javascript' | 'python' | 'java' | 'cpp';
                 initialCode: string;
@@ -101,4 +102,7 @@ export interface Course {
     endTime?: string;
     moduleId?: string;
     courseId?: string;
+
+    // AI Generation Metadata
+    aiTokensUsed?: number;
 }

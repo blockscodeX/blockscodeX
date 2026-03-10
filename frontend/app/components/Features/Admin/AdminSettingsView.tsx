@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { siteConfig } from "@/app/config/site";
 import { Settings, Globe, Palette, Mail, UserPlus, Save, Globe2, Link as LinkIcon, Camera, Layout, ShieldAlert, Lock, PauseCircle, PlayCircle } from "lucide-react";
 
 interface AdminSettingsViewProps {
@@ -13,10 +14,10 @@ interface AdminSettingsViewProps {
 
 export default function AdminSettingsView({ basePath = '/dashboard/admin', userRole = 'admin', isSuperAdminView = false, initialData, onSave }: AdminSettingsViewProps) {
     const [branding, setBranding] = useState(initialData || {
-        name: "BlocksCode University",
+        name: siteConfig.adminSettingsOrgName,
         subdomain: "bcu",
         primaryColor: "#fc751b",
-        email: "admin@blockscode.edu",
+        email: siteConfig.contactEmail,
         contact: "+91 98765 43210",
         maxUsers: "2000",
         status: "Active",
@@ -183,7 +184,7 @@ export default function AdminSettingsView({ basePath = '/dashboard/admin', userR
                                             value={branding.subdomain}
                                             onChange={(e) => setBranding({ ...branding, subdomain: e.target.value })}
                                         />
-                                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase">.blockscode.me</span>
+                                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase">.{siteConfig.domain}</span>
                                     </div>
                                 </div>
                             </div>
@@ -272,7 +273,7 @@ export default function AdminSettingsView({ basePath = '/dashboard/admin', userR
                                     </div>
                                     <div>
                                         <p className="text-lg font-black tracking-tight">{branding.name}</p>
-                                        <p className="text-[10px] font-bold text-white/40">{branding.subdomain}.blockscode.me</p>
+                                        <p className="text-[10px] font-bold text-white/40">{branding.subdomain}.{siteConfig.domain}</p>
                                     </div>
                                 </div>
 

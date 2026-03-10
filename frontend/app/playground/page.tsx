@@ -96,7 +96,7 @@ export default function PlaygroundPage() {
     // ... (keep handleClear, addTab, deleteTab, updateTabLang) ...
 
     return (
-        <div className="h-screen flex flex-col bg-white overflow-hidden">
+        <div className="h-screen flex flex-col bg-white overflow-hidden font-sans">
             {/* ... Navbar ... */}
             <Navbar />
 

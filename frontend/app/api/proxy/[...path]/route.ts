@@ -29,11 +29,7 @@ async function handleRequest(request: NextRequest, params: Promise<{ path: strin
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
 
-    console.log(`[Proxy] Request to /${pathString}`, { 
-        hasToken: !!token, 
-        tokenStart: token ? token.substring(0, 10) + '...' : 'N/A',
-        contentType: request.headers.get('content-type') || 'none'
-    });
+    console.log(`[Proxy] Request to /${pathString}`);
 
     const headers: HeadersInit = {};
 
@@ -48,16 +44,21 @@ async function handleRequest(request: NextRequest, params: Promise<{ path: strin
         headers['Cookie'] = `auth_token=${token}`;    // For strategies checking Cookie (redundancy)
     }
 
-    const url = `${BASE_URL}/${pathString}${request.nextUrl.search}`;
-    
+    const url = new URL(`${BASE_URL}/${pathString}${request.nextUrl.search}`);
+
+    // Prevent SSRF via path traversal (e.g. `../../../`)
+    if (!url.href.startsWith(BASE_URL)) {
+        return NextResponse.json({ message: 'Invalid API Path' }, { status: 400 });
+    }
+
     // Read body as ArrayBuffer to ensure intact data transmission
     // This avoids issues with streaming implementation mismatches
-    const body = (request.method !== 'GET' && request.method !== 'HEAD') 
-        ? await request.arrayBuffer() 
+    const body = (request.method !== 'GET' && request.method !== 'HEAD')
+        ? await request.arrayBuffer()
         : undefined;
 
     try {
-        const response = await fetch(url, {
+        const response = await fetch(url.href, {
             method: request.method,
             headers,
             body,

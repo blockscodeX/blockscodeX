@@ -8,7 +8,7 @@ const BASE_URL = typeof window !== 'undefined' ? '/api/proxy' : (process.env.NEX
 // Cache: Max 10 exams, TTL 10 minutes
 const examCache = new LRUCache<string, any>({
     max: 10,
-    ttl: 1000 * 60 * 10, 
+    ttl: 1000 * 60 * 10,
 });
 
 const getHeaders = () => {
@@ -36,10 +36,10 @@ export const ExamService = {
                 throw new Error(`API Error: ${res.status}`);
             }
             const data = await res.json();
-            
+
             // Store in cache
             examCache.set(slug, data);
-            
+
             return data;
         } catch (error) {
             console.error(`[ExamService] API GetExam failed for ${slug}`, error);
@@ -50,12 +50,12 @@ export const ExamService = {
     async getExamPublicStatus(slug: string): Promise<any> {
         try {
             const res = await fetch(`${BASE_URL}/exam/${slug}/public-status`);
-            
+
             // Explicitly handle 404 from Proxy/Backend
             if (res.status === 404) {
-                 const err = new Error('Exam not found');
-                 (err as any).status = 404;
-                 throw err;
+                const err = new Error('Exam not found');
+                (err as any).status = 404;
+                throw err;
             }
 
             if (!res.ok) throw new Error('Failed to fetch status');
@@ -72,7 +72,7 @@ export const ExamService = {
     },
 
     async checkExamStatus(slug: string): Promise<any> {
-         try {
+        try {
             const res = await fetch(`${BASE_URL}/exam/${slug}/check?json=1`);
             return await res.json();
         } catch (error) {
@@ -84,7 +84,7 @@ export const ExamService = {
 
     async startExam(slug: string, deviceId?: string, userId?: string, tabId?: string, metadata?: any): Promise<any> {
         try {
-            const res = await fetch(`${BASE_URL}/exam/${slug}/start`, {
+            const res = await fetch(`${BASE_URL}/exam/${slug}/enter`, {
                 method: 'POST',
                 headers: getHeaders(),
                 body: JSON.stringify({ deviceId: deviceId || 'web-browser', userId, tabId, metadata })
@@ -94,9 +94,13 @@ export const ExamService = {
                 if (res.status === 409 || (errorData.message && errorData.message.includes('ALREADY'))) {
                     throw new Error('EXAM_ALREADY_ACTIVE');
                 }
+                if (errorData.message) {
+                    throw new Error(errorData.message);
+                }
                 throw new Error('Failed to start exam');
             }
-            return await res.json();
+            const data = await res.json();
+            return data.session || data;
         } catch (error) {
             console.error(`[ExamService] startExam failed for ${slug}`, error);
             throw error;

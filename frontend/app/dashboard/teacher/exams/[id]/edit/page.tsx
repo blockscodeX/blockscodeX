@@ -2,7 +2,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import ExamBuilder from '@/app/components/Authoring/ExamBuilder';
 import { useRouter } from 'next/navigation';
-import Loading from '@/app/loading';
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import AlertModal from '@/app/components/Common/AlertModal';
 import { TeacherService } from '@/services/api/TeacherService';
 
@@ -43,11 +43,11 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         }
     };
 
-    if (loading) return <Loading />;
+    if (loading) return <DashboardSkeleton type="form" userRole="teacher" />;
     if (!exam) return <div className="p-12 text-center font-black uppercase tracking-widest text-rose-500">Exam Not Found</div>;
 
     return (
-        <Suspense fallback={<Loading />}>
+        <Suspense fallback={<DashboardSkeleton type="form" userRole="teacher" />}>
             <div className="min-h-screen bg-white">
                 <ExamBuilder initialData={exam as any} onDelete={handleDelete} />
             </div>

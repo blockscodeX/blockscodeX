@@ -1,7 +1,7 @@
 "use client";
 import React, { Suspense } from 'react';
 import ExamBuilder from '@/app/components/Authoring/ExamBuilder';
-import Loading from '@/app/loading';
+import DashboardSkeleton from '@/app/components/Skeletons/DashboardSkeleton';
 import { AuthService } from '@/services/api/AuthService';
 
 export default function CreateExamPage() {
@@ -12,7 +12,7 @@ export default function CreateExamPage() {
     }, []);
 
     return (
-        <Suspense fallback={<Loading />}>
+        <Suspense fallback={<DashboardSkeleton type="form" userRole="teacher" />}>
             <div className="min-h-screen bg-white">
                 <ExamBuilder orgPermissions={userData?.features} />
             </div>

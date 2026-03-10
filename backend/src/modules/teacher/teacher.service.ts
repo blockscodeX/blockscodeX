@@ -35,7 +35,7 @@ export class TeacherService {
         if (cached) return JSON.parse(cached);
 
         const totalExams = await this.prisma.exam.count({ where: { creatorId: userId, isActive: true } });
-        
+
         // Scope students count based on role
         const studentWhere: any = { role: 'STUDENT' };
         if (user.role === 'ADMIN') {
@@ -46,7 +46,7 @@ export class TeacherService {
         }
 
         const totalStudents = await this.prisma.user.count({ where: studentWhere });
-        
+
         const recentSubmissionsCount = await this.prisma.examSession.count({
             where: {
                 exam: { creatorId: userId },
@@ -221,7 +221,7 @@ export class TeacherService {
             const detailedCourses = s.courses.map((course: any) => {
                 const allCourseUnitIds = course.modules.flatMap((m: any) => m.units.map((u: any) => u.id));
                 const totalUnits = allCourseUnitIds.length;
-                
+
                 let completedCount = 0;
                 for (const uid of allCourseUnitIds) {
                     if (completedUnitIds.has(uid)) completedCount++;
@@ -292,10 +292,17 @@ export class TeacherService {
             return s.unit.module.course.creatorId === user.id;
         });
 
-        // Weekly activity
+        // Weekly activity via DB query optimization
         const weeklyActivity = [];
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const today = new Date();
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 6);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
+        const recentSubmissions = filteredSubmissions.filter((s: any) => {
+            return new Date(s.createdAt) >= sevenDaysAgo;
+        });
 
         for (let i = 6; i >= 0; i--) {
             const date = new Date(today);
@@ -305,7 +312,7 @@ export class TeacherService {
             const nextDate = new Date(date);
             nextDate.setDate(nextDate.getDate() + 1);
 
-            const daySubmissions = filteredSubmissions.filter((s: any) => {
+            const daySubmissions = recentSubmissions.filter((s: any) => {
                 const subDate = new Date(s.createdAt);
                 return subDate >= date && subDate < nextDate;
             });
@@ -409,23 +416,33 @@ export class TeacherService {
         return streak;
     }
 
-    async getStudentAttempts(studentId: string, teacherId: string) {
-        // ... (existing code for getStudentAttempts)
-        // Verify teacher has access to this student
-        const enrollment = await this.prisma.course.findFirst({
-            where: {
-                creatorId: teacherId,
-                students: { some: { id: studentId } }
-            }
-        });
+    async getStudentAttempts(studentId: string, user: any) {
+        // Verify teacher/admin has access to this student
+        const teacherId = user.id;
+        const orgId = user.orgId;
 
-        if (!enrollment) throw new Error('Access denied: Student not enrolled in your courses');
+        if (user.role === 'ADMIN') {
+            const student = await this.prisma.user.findUnique({ where: { id: studentId } });
+            if (!student || student.orgId !== orgId) throw new ForbiddenException('Access denied: Student not in your organization');
+        } else if (user.role !== 'SUPER_ADMIN') {
+            const enrollment = await this.prisma.course.findFirst({
+                where: {
+                    creatorId: teacherId,
+                    students: { some: { id: studentId } }
+                }
+            });
+            if (!enrollment) throw new ForbiddenException('Access denied: Student not enrolled in your courses');
+        }
+
+        const whereClause: any = { userId: studentId };
+        if (user.role === 'ADMIN') {
+            whereClause.exam = { orgId };
+        } else if (user.role !== 'SUPER_ADMIN') {
+            whereClause.exam = { creatorId: teacherId };
+        }
 
         const sessions = await this.prisma.examSession.findMany({
-            where: {
-                userId: studentId,
-                exam: { creatorId: teacherId }
-            },
+            where: whereClause,
             include: {
                 exam: {
                     select: {
@@ -450,26 +467,30 @@ export class TeacherService {
         }));
     }
 
-    async getStudentUnitSubmissions(studentId: string, teacherId: string) {
-        // Verify teacher has access to this student
-        const enrollment = await this.prisma.course.findFirst({
-            where: {
-                creatorId: teacherId,
-                students: { some: { id: studentId } }
-            }
-        });
+    async getStudentUnitSubmissions(studentId: string, user: any) {
+        // Verify teacher/admin has access to this student
+        const teacherId = user.id;
+        const orgId = user.orgId;
 
-        if (!enrollment) throw new Error('Access denied: Student not enrolled in your courses');
+        const submissionFilter: any = { userId: studentId };
+
+        if (user.role === 'ADMIN') {
+            const student = await this.prisma.user.findUnique({ where: { id: studentId } });
+            if (!student || student.orgId !== orgId) throw new ForbiddenException('Access denied: Student not in your organization');
+            submissionFilter.unit = { module: { course: { orgId } } };
+        } else if (user.role !== 'SUPER_ADMIN') {
+            const enrollment = await this.prisma.course.findFirst({
+                where: {
+                    creatorId: teacherId,
+                    students: { some: { id: studentId } }
+                }
+            });
+            if (!enrollment) throw new ForbiddenException('Access denied: Student not enrolled in your courses');
+            submissionFilter.unit = { module: { course: { creatorId: teacherId } } };
+        }
 
         const submissions = await this.prisma.unitSubmission.findMany({
-            where: {
-                userId: studentId,
-                unit: {
-                    module: {
-                        course: { creatorId: teacherId }
-                    }
-                }
-            },
+            where: submissionFilter,
             include: {
                 unit: {
                     select: {
@@ -496,7 +517,7 @@ export class TeacherService {
                     testCases = contentObj.testCases;
                 }
             }
-            
+
             // Fallback logic
             if (testCases === '-' && sub.score !== null) {
                 testCases = sub.score === 100 ? '1 / 1' : '0 / 1';
@@ -563,7 +584,7 @@ export class TeacherService {
         for (const email of emails) {
             try {
                 const student = await this.prisma.user.findUnique({ where: { email } });
-                
+
                 if (!student) {
                     results.push({ email, success: false, error: 'User not found' });
                     failedCount++;
@@ -734,6 +755,8 @@ export class TeacherService {
                 difficulty: data.difficulty,
                 tags: data.tags,
                 thumbnail: data.thumbnail,
+                courseSummary: data.courseSummary,
+                aiTokensUsed: data.aiTokensUsed ? Number(data.aiTokensUsed) : undefined,
                 isVisible: !!data.isVisible,
                 status: data.status
             }
@@ -742,7 +765,7 @@ export class TeacherService {
         // Invalidate course cache
         await this.courseService.invalidateCourseCache(course.slug);
         if (existing.slug !== course.slug) {
-             await this.courseService.invalidateCourseCache(existing.slug);
+            await this.courseService.invalidateCourseCache(existing.slug);
         }
 
         // 1. Sync Modules and Units
@@ -765,14 +788,14 @@ export class TeacherService {
 
                 let module;
                 if (!isNewModule) {
-                     module = await this.prisma.courseModule.upsert({
+                    module = await this.prisma.courseModule.upsert({
                         where: { id: sec.id },
                         update: { title: sec.title, order: i },
                         create: { id: sec.id, title: sec.title, order: i, courseId: id }
                     });
                 } else {
-                     module = await this.prisma.courseModule.create({ 
-                        data: { title: sec.title, order: i, courseId: id } 
+                    module = await this.prisma.courseModule.create({
+                        data: { title: sec.title, order: i, courseId: id }
                     });
                 }
 
@@ -780,7 +803,7 @@ export class TeacherService {
                     // Refresh existing units list for deletion check since we might have upserted the module
                     const unitsInDb = await this.prisma.unit.findMany({ where: { moduleId: module.id }, select: { id: true } });
                     const unitsInDbIds = unitsInDb.map(u => u.id);
-                    
+
                     const currentUnitIds = sec.questions.map((q: any) => q.id).filter((id: string) => this.isUUID(id));
                     const unitsToDelete = unitsInDbIds.filter((uid: string) => !currentUnitIds.includes(uid));
 
@@ -791,7 +814,7 @@ export class TeacherService {
                     for (let j = 0; j < sec.questions.length; j++) {
                         const q = sec.questions[j];
                         const hasUUID = this.isUUID(q.id);
-                        
+
                         const unitData = {
                             title: q.title,
                             type: q.type,
@@ -850,6 +873,53 @@ export class TeacherService {
             }
         }
 
+        // 3. Recalculate CourseProgress for all enrolled students so both dashboards
+        //    stay coherent after unit additions/deletions.
+        const updatedCourse = await this.prisma.course.findUnique({
+            where: { id },
+            include: {
+                modules: { include: { units: { select: { id: true } } } },
+                students: { select: { id: true } }
+            }
+        });
+
+        if (updatedCourse && updatedCourse.students.length > 0) {
+            const allUnitIds = updatedCourse.modules.flatMap((m: any) => m.units.map((u: any) => u.id));
+            const totalUnits = allUnitIds.length;
+
+            for (const student of updatedCourse.students) {
+                const completedSubmissions = await this.prisma.unitSubmission.findMany({
+                    where: {
+                        userId: student.id,
+                        unitId: { in: allUnitIds },
+                        status: 'COMPLETED'
+                    },
+                    select: { unitId: true }
+                });
+
+                const completedUnitIds = [...new Set(completedSubmissions.map((s: any) => s.unitId))];
+                const completedCount = completedUnitIds.length;
+                const percent = totalUnits > 0 ? Math.round((completedCount / totalUnits) * 100) : 0;
+                const status =
+                    completedCount === totalUnits && totalUnits > 0
+                        ? 'Completed'
+                        : completedCount > 0
+                        ? 'In Progress'
+                        : 'Not Started';
+
+                // @ts-ignore
+                await this.prisma.courseProgress.upsert({
+                    where: { userId_courseId: { userId: student.id, courseId: id } },
+                    update: { completedUnits: completedUnitIds, totalUnits, completedCount, percent, status },
+                    create: { userId: student.id, courseId: id, completedUnits: completedUnitIds, totalUnits, completedCount, percent, status }
+                });
+
+                // Invalidate student stats caches
+                await this.redis.del(`student:stats:${student.id}`);
+                await this.redis.del(`student:analytics:${student.id}`);
+            }
+        }
+
         return course;
     }
 
@@ -875,6 +945,8 @@ export class TeacherService {
                 difficulty: data.difficulty,
                 tags: data.tags || [],
                 thumbnail: data.thumbnail,
+                courseSummary: data.courseSummary,
+                aiTokensUsed: data.aiTokensUsed ? Number(data.aiTokensUsed) : undefined,
                 isVisible: !!data.isVisible,
                 status: data.status || 'Draft',
                 modules: {
@@ -934,6 +1006,7 @@ export class TeacherService {
                 startTime: data.startTime ? new Date(data.startTime) : null,
                 endTime: data.endTime ? new Date(data.endTime) : null,
                 questions: data.sections || data.questions || [],
+                aiTokensUsed: data.aiTokensUsed ? Number(data.aiTokensUsed) : undefined,
                 isActive: data.isActive ?? data.isVisible ?? true
             } as any
         });
@@ -947,7 +1020,7 @@ export class TeacherService {
         // Calculate total marks from questions if provided
         let calculatedTotalMarks = 0;
         const questionsSource = data.sections || data.questions;
-        
+
         const sumMarks = (items: any[]) => {
             items.forEach(item => {
                 if (item.questions && Array.isArray(item.questions)) {
@@ -959,17 +1032,17 @@ export class TeacherService {
         };
 
         if (questionsSource) {
-             if (Array.isArray(questionsSource)) {
-                 sumMarks(questionsSource);
-             } else if (typeof questionsSource === 'object') {
-                 sumMarks(Object.values(questionsSource));
-             }
+            if (Array.isArray(questionsSource)) {
+                sumMarks(questionsSource);
+            } else if (typeof questionsSource === 'object') {
+                sumMarks(Object.values(questionsSource));
+            }
         }
-        
+
         // Use calculated if > 0, else use provided, else undefined
         const finalTotalMarks = calculatedTotalMarks > 0 ? calculatedTotalMarks : (data.totalMarks ? Number(data.totalMarks) : undefined);
 
-        return this.prisma.exam.update({
+        const updatedExam = await this.prisma.exam.update({
             where: { id },
             data: {
                 title: data.title,
@@ -991,9 +1064,18 @@ export class TeacherService {
                 startTime: data.startTime ? new Date(data.startTime) : null,
                 endTime: data.endTime ? new Date(data.endTime) : null,
                 questions: data.sections || data.questions,
+                aiTokensUsed: data.aiTokensUsed ? Number(data.aiTokensUsed) : undefined,
                 isActive: data.isActive ?? data.isVisible
             }
         });
+
+        // Invalidate Redis cache
+        await this.redis.del(`exam:content:${updatedExam.slug}`);
+        if (existing.slug !== updatedExam.slug) {
+            await this.redis.del(`exam:content:${existing.slug}`);
+        }
+
+        return updatedExam;
     }
 
     async deleteExam(id: string, user: any) {
@@ -1150,7 +1232,7 @@ export class TeacherService {
         if (!exam) throw new Error('Exam not found');
         this.checkAccess(exam, user);
 
-         // Find sessions to invalidate cache
+        // Find sessions to invalidate cache
         const sessions = await this.prisma.examSession.findMany({
             where: { examId, userId: studentId }
         });
@@ -1161,7 +1243,7 @@ export class TeacherService {
             data: { status: 'IN_PROGRESS', endTime: null }
         });
 
-         // Invalidate caches to allow re-entry/re-processing
+        // Invalidate caches to allow re-entry/re-processing
         for (const session of sessions) {
             await this.redis.del(`session:status:${session.id}`);
             await this.redis.del(`session:meta:${session.id}`);
@@ -1217,8 +1299,8 @@ export class TeacherService {
             this.prisma.examSession.count({ where })
         ]);
 
-         // Map sessions to frontend format
-         const mappedSessions = sessions.map((session: any) => {
+        // Map sessions to frontend format
+        const mappedSessions = sessions.map((session: any) => {
             const answers = typeof session.answers === 'string'
                 ? JSON.parse(session.answers)
                 : (session.answers || {});
@@ -1232,7 +1314,7 @@ export class TeacherService {
             // Calculate total possible marks dynamically from questions
             let dynamicTotalMarks = 0;
             let questionsData = exam.questions as any;
-            
+
             if (typeof questionsData === 'string') {
                 try {
                     questionsData = JSON.parse(questionsData);
@@ -1240,7 +1322,7 @@ export class TeacherService {
                     console.error('Failed to parse exam questions JSON', e);
                 }
             }
-            
+
             const processQuestion = (q: any) => {
                 const marks = Number(q.marks) || Number(q.points) || (q.type === 'Coding' ? 10 : 1);
                 dynamicTotalMarks += marks;
@@ -1257,8 +1339,8 @@ export class TeacherService {
                     // Check if it's an array of sections or questions
                     const firstItem = questionsData[0];
                     if (firstItem && (firstItem.questions || firstItem.id?.startsWith('sec-'))) {
-                         // It's likely an array of sections
-                         questionsData.forEach((sec: any) => {
+                        // It's likely an array of sections
+                        questionsData.forEach((sec: any) => {
                             if (sec.questions && Array.isArray(sec.questions)) {
                                 sec.questions.forEach(processQuestion);
                             }
@@ -1284,7 +1366,7 @@ export class TeacherService {
 
             // Fallback to exam.totalMarks if dynamic calculation yields 0 (e.g. empty exam)
             const totalMarks = dynamicTotalMarks > 0 ? dynamicTotalMarks : (Number(exam.totalMarks) || 0);
-            
+
             const status = totalMarks > 0
                 ? (score / totalMarks >= 0.4 ? 'Passed' : 'Failed')
                 : (session.status === 'COMPLETED' ? 'Submitted' : 'Failed');
@@ -1322,10 +1404,10 @@ export class TeacherService {
                 totalCount: allStatsData.length,
                 highScore: Math.max(...allStatsData.map((s: any) => Number(s.score) || 0), 0),
                 distribution: [
-                    { score: '0-25%', count: allStatsData.filter((r: any) => (Number(r.score) / (Number(exam.totalMarks)||100)) < 0.25).length },
-                    { score: '25-50%', count: allStatsData.filter((r: any) => { const p = Number(r.score)/(Number(exam.totalMarks)||100); return p >= 0.25 && p < 0.5; }).length },
-                    { score: '50-75%', count: allStatsData.filter((r: any) => { const p = Number(r.score)/(Number(exam.totalMarks)||100); return p >= 0.5 && p < 0.75; }).length },
-                    { score: '75-100%', count: allStatsData.filter((r: any) => (Number(r.score) / (Number(exam.totalMarks)||100)) >= 0.75).length },
+                    { score: '0-25%', count: allStatsData.filter((r: any) => (Number(r.score) / (Number(exam.totalMarks) || 100)) < 0.25).length },
+                    { score: '25-50%', count: allStatsData.filter((r: any) => { const p = Number(r.score) / (Number(exam.totalMarks) || 100); return p >= 0.25 && p < 0.5; }).length },
+                    { score: '50-75%', count: allStatsData.filter((r: any) => { const p = Number(r.score) / (Number(exam.totalMarks) || 100); return p >= 0.5 && p < 0.75; }).length },
+                    { score: '75-100%', count: allStatsData.filter((r: any) => (Number(r.score) / (Number(exam.totalMarks) || 100)) >= 0.75).length },
                 ]
             }
         };

@@ -7,6 +7,7 @@ import { Shield, Menu, X } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { siteConfig } from "../config/site"
 
 export function LandingNavbar() {
   const pathname = usePathname()
@@ -24,10 +25,8 @@ export function LandingNavbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <div className="relative w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900">BlocksCode</span>
+            <img src={siteConfig.logo} alt={siteConfig.name} className="w-8 h-8 object-contain" />
+            <span className="text-xl font-bold text-gray-900">{siteConfig.name}</span>
           </Link>
 
           {/* Desktop Navigation */}

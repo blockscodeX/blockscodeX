@@ -5,7 +5,7 @@ import Navbar from "@/app/components/Navbar";
 import Link from "next/link";
 import { Search, Building2, Plus, Filter, MoreVertical, Globe, Users, Settings2, Trash2, Edit3, ShieldCheck } from "lucide-react";
 import { useToast } from "@/app/components/Common/Toast";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 
 export default function SuperAdminOrganizationsPage() {
     const [searchQuery, setSearchQuery] = useState("");
@@ -47,7 +47,7 @@ export default function SuperAdminOrganizationsPage() {
         }
     };
 
-    if (loading) return <Loading />;
+    if (loading) return <DashboardSkeleton type="list" userRole="super-admin" />;
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans">

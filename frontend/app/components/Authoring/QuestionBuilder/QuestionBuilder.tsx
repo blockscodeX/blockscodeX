@@ -66,10 +66,6 @@ export default function QuestionBuilder({ question, onChange }: QuestionBuilderP
                     <section className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400">Problem Statement</h3>
-                            <button className="flex items-center gap-2 text-[var(--brand)] text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform group">
-                                <Sparkles size={14} className="group-hover:animate-pulse" />
-                                AI Assist
-                            </button>
                         </div>
                         <RichTextEditor
                             content={question.problemStatement}

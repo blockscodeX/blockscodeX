@@ -15,7 +15,8 @@ export default function ProfilePage() {
     const { toast } = useToast();
     const router = useRouter();
     const [avatar, setAvatar] = useState<string | null>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [removingAvatar, setRemovingAvatar] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Password State
@@ -40,11 +41,9 @@ export default function ProfilePage() {
         if (!name.trim()) return;
         setSaving(true);
         try {
-            const updated = await AuthService.updateProfile({ 
-                name,
-                profilePicture: selectedFile || undefined
-            });
+            const updated = await AuthService.updateProfile({ name });
             setUserData(updated);
+            if (updated.profilePicture) setAvatar(updated.profilePicture);
             toast("Your instructor profile has been updated.", "success", "Profile Updated");
         } catch (error: any) {
             toast(error.message || "Failed to update profile", "error", "Error");
@@ -91,12 +90,36 @@ export default function ProfilePage() {
         fileInputRef.current?.click();
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            setSelectedFile(file);
-            const url = URL.createObjectURL(file);
-            setAvatar(url);
+        if (!file) return;
+        setAvatar(URL.createObjectURL(file));
+        setUploadingAvatar(true);
+        try {
+            const updated = await AuthService.uploadAvatar(file);
+            setUserData(updated);
+            setAvatar(updated.profilePicture);
+            toast("Profile picture updated.", "success", "Avatar Saved");
+        } catch (error: any) {
+            setAvatar(userData?.profilePicture || null);
+            toast(error.message || "Failed to upload avatar", "error", "Upload Failed");
+        } finally {
+            setUploadingAvatar(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleRemoveAvatar = async () => {
+        setRemovingAvatar(true);
+        try {
+            const updated = await AuthService.removeProfilePicture();
+            setUserData(updated);
+            setAvatar(null);
+            toast("Profile picture removed.", "success", "Updated");
+        } catch (error: any) {
+            toast(error.message || "Failed to remove profile picture", "error", "Error");
+        } finally {
+            setRemovingAvatar(false);
         }
     };
 
@@ -112,7 +135,7 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/50 font-inter">
+        <div className="min-h-screen bg-slate-50/50 font-sans">
             <Navbar userRole="teacher" />
 
             <main className="max-w-5xl mx-auto px-6 py-12">
@@ -128,10 +151,25 @@ export default function ProfilePage() {
                             ) : (
                                 name.charAt(0)
                             )}
+                            {uploadingAvatar && (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                    <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                                </div>
+                            )}
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
                             </div>
                         </div>
+                        {avatar && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleRemoveAvatar(); }}
+                                disabled={removingAvatar}
+                                className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg text-xs font-bold z-10"
+                                title="Remove profile picture"
+                            >
+                                {removingAvatar ? '…' : '✕'}
+                            </button>
+                        )}
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -149,8 +187,13 @@ export default function ProfilePage() {
                                 {userData?.role || "Instructor"}
                             </span>
                             <span className="px-4 py-1.5 bg-slate-100 text-slate-500 text-[11px] font-black uppercase tracking-widest rounded-full">
-                                Teacher ID: #{userData?.id?.substring(0, 8) || "N/A"}
+                                Teacher ID: {userData?.rollNumber || userData?.id?.substring(0, 8) || "N/A"}
                             </span>
+                            {userData?.department && (
+                                <span className="px-4 py-1.5 bg-slate-100 text-slate-500 text-[11px] font-black uppercase tracking-widest rounded-full">
+                                    {userData?.department} Department
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>

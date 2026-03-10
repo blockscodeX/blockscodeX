@@ -22,6 +22,7 @@ model User {
   name       String?
   profilePicture String?
   rollNumber String? @unique // Explicitly requested field
+  department String?
   role       Role    @default(STUDENT)
   isActive           Boolean @default(true)
   mustChangePassword Boolean @default(true)
@@ -42,6 +43,15 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Persistence for Student Stats
+  dailyStreak       Int       @default(0)
+  lastActivityDate  DateTime?
+  totalXP           Int       @default(0)
+
+  // Course Progress Relation
+  progress CourseProgress[]
+  questionAttempts QuestionAttempt[]
 
   orgId        String?
   organization Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
@@ -82,6 +92,7 @@ model Exam {
   questions Json // Stored as JSON: Assessment sections/questions
   isActive  Boolean @default(true)
   resultsPublished Boolean @default(false)
+  aiTokensUsed Int? @default(0)
 
   submissions ExamSession[]
   feedbacks   Feedback[]
@@ -130,6 +141,8 @@ model ExamSession {
   @@unique([userId, examId]) // One active session per exam rule
   @@index([userId])
   @@index([examId])
+  @@index([status])             // Used in active session filtering
+  @@index([userId, status])     // Compound for "active sessions by user"
 }
 
 model Violation {
@@ -145,6 +158,7 @@ model Violation {
 
   @@index([sessionId])
   @@index([type])
+  @@index([sessionId, type])
 }
 
 model AuditLog {
@@ -183,8 +197,10 @@ model Course {
   difficulty       String? // Beginner, Intermediate, Advanced
   tags             String[] @default([])
   thumbnail        String?
+  courseSummary    String? // AI Generated Syllabus / Cheat Sheet
   isVisible        Boolean  @default(false)
   status           String   @default("Draft") // Draft, Published, Archived
+  aiTokensUsed     Int?     @default(0)
 
   modules CourseModule[]
   tests   CourseTest[]
@@ -205,6 +221,8 @@ model Course {
   @@index([creatorId])
   @@index([orgId])
   @@index([slug])
+
+  progress CourseProgress[]
 }
 
 model CourseModule {
@@ -280,6 +298,8 @@ model UnitSubmission {
   @@index([userId])
   @@index([unitId])
   @@index([status])
+  @@index([userId, unitId, status])  // Compound for progress calculations
+  @@index([createdAt])               // Used in weekly activity analytics
 }
 
 model Organization {
@@ -331,4 +351,43 @@ model Bookmark {
   @@unique([userId, customId])
   @@index([userId])
   @@index([customId])
+}
+
+model CourseProgress {
+  id             String   @id @default(uuid())
+  userId         String
+  courseId       String
+  completedUnits String[] // List of unit IDs completed
+  totalUnits     Int
+  completedCount Int
+  percent        Int
+  status         String   // "Not Started", "In Progress", "Completed"
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model QuestionAttempt {
+  id         String   @id @default(uuid())
+  userId     String
+  itemId     String   // Unit ID or Exam Question ID
+  sessionId  String?  // Reference to ExamSession if applicable
+  type       String   // "UNIT" or "EXAM"
+  content    Json     // The answer provided
+  isCorrect  Boolean  @default(false)
+  score      Float?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, itemId])
+  @@index([type])
+  @@index([userId, createdAt])  // Used in analytics time-range queries
+  @@index([sessionId])          // Used in attempt rollups
 }

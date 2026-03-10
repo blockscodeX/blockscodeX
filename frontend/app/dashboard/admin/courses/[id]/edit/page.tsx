@@ -4,7 +4,7 @@ import CourseEditor from "@/app/components/Features/Courses/CourseEditor";
 import { useRouter } from "next/navigation";
 import AlertModal from "@/app/components/Common/AlertModal";
 import { TeacherService } from "@/services/api/TeacherService";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 
 export default function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = React.use(params);
@@ -49,7 +49,7 @@ export default function EditCoursePage({ params }: { params: Promise<{ id: strin
         }
     };
 
-    if (loading) return <Loading />;
+    if (loading) return <DashboardSkeleton type="form" userRole="admin" />;
     if (error) return <div className="p-8 text-center text-red-500 font-bold">{error}</div>;
 
     return (

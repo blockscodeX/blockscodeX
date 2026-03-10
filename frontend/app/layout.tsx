@@ -12,9 +12,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import { siteConfig } from "./config/site";
+
 export const metadata: Metadata = {
-  title: "BlocksCode",
-  description: "Learn to code with BlocksCode",
+  title: siteConfig.name,
+  description: siteConfig.description,
 };
 
 import { ToastProvider } from "./components/Common/Toast";
@@ -43,7 +45,7 @@ export default function RootLayout({
         )}
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <NextTopLoader color="#4394FF" showSpinner={false} speed={400} />
         <OrganizationProvider>

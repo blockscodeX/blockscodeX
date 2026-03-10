@@ -9,7 +9,7 @@ async function bootstrap() {
         AppModule,
         new FastifyAdapter({
             logger: process.env.NODE_ENV !== 'production',
-            bodyLimit: 50 * 1024 * 1024 // 50MB
+            bodyLimit: 600 * 1024 * 1024 // 600MB (to accommodate 500MB video uploads)
         })
     );
 
@@ -23,20 +23,23 @@ async function bootstrap() {
     // Register multipart support for file uploads
     await app.register(require('@fastify/multipart'), {
         limits: {
-            fileSize: 5 * 1024 * 1024, // 5MB
+            fileSize: 500 * 1024 * 1024, // 500MB (to support course video uploads)
         },
     });
 
+    const cookieSecret = process.env.COOKIE_SECRET;
+    if (!cookieSecret) throw new Error('COOKIE_SECRET environment variable is missing.');
+
     // Register cookie support
     await app.register(require('@fastify/cookie'), {
-        secret: process.env.COOKIE_SECRET || 'my-super-secret-secret', 
-        parseOptions: {} 
+        secret: cookieSecret,
+        parseOptions: {}
     });
 
     // Register compression for performance (gzip/brotli)
-    await app.register(require('@fastify/compress'), { 
-        global: true, 
-        encodings: ['br', 'gzip', 'deflate'] 
+    await app.register(require('@fastify/compress'), {
+        global: true,
+        encodings: ['br', 'gzip', 'deflate']
     });
 
     // Set global API prefix
@@ -47,32 +50,26 @@ async function bootstrap() {
         // Dynamic origin to support both localhost and production Vercel apps
         origin: (origin, callback) => {
             const allowedOrigins = [
-                'http://localhost:3000',
                 'https://blockscode-production.vercel.app',
-                'tauri://localhost',
-                'http://localhost:1420',
                 'https://www.blockscode.me',
                 'https://blockscode.me'
             ];
-            
+
             // Allow requests with no origin (like mobile apps or curl requests)
             if (!origin) return callback(null, true);
-            
+
             // Check if origin is in the allowed list
             if (allowedOrigins.includes(origin)) {
                 return callback(null, true);
             }
-            
+
             // Support all subdomains of blockscode.me (bai.blockscode.me, sai.blockscode.me, custom.blockscode.me, etc.)
             if (/^https?:\/\/[a-zA-Z0-9-]+\.blockscode\.me$/.test(origin)) {
                 return callback(null, true);
             }
-            
-            // Support all Vercel preview deployments
-            if (origin.endsWith('.vercel.app')) {
-                return callback(null, true);
-            }
-            
+
+            // Note: If dynamic preview domains are needed, they should be explicitly allowed via environment variables, not a wildcard.
+
             // In development, might want to be more lenient or log
             console.log('Blocked CORS:', origin);
             callback(null, false);

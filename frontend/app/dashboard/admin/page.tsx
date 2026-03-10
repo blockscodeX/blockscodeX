@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import AdminDashboardView from "@/app/components/Features/Admin/AdminDashboardView";
 import { requireAuthClient } from "@/hooks/requireAuthClient";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 
 export default function AdminDashboardPage() {
     const [authChecked, setAuthChecked] = useState(false);
@@ -10,6 +10,6 @@ export default function AdminDashboardPage() {
         if (!requireAuthClient("/login")) return;
         setAuthChecked(true);
     }, []);
-    if (!authChecked) return <Loading />;
+    if (!authChecked) return <DashboardSkeleton type="main" userRole="admin" />;
     return <AdminDashboardView />;
 }

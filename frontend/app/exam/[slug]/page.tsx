@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter, notFound } from "next/navigation";
 import NotFoundPage from "../../not-found";
-import Navbar, { ExamConfig } from "../../components/Navbar";
+import Navbar, { ExamConfig } from '@/app/components/Navbar';
+import CoursePlayerSkeleton from '@/app/components/Skeletons/CoursePlayerSkeleton';
 import ExamSidebar from "../../components/ExamSidebar";
-import UnitRenderer, { UnitQuestion } from "../../components/UnitRenderer";
+import UnitRenderer, { UnitQuestion } from '@/app/components/UnitRenderer';
 import { useToast } from "../../components/Common/Toast";
 import ExamSubmitView from "../../components/ExamSubmitView";
 import ExamFeedbackView from "../../components/ExamFeedbackView";
@@ -34,7 +35,7 @@ const seededRandom = (seed: number) => {
     const a = 1103515245;
     const c = 12345;
     let state = seed ? seed : Math.floor(Math.random() * (m - 1));
-    return function() {
+    return function () {
         state = (a * state + c) % m;
         return state / (m - 1);
     };
@@ -242,21 +243,20 @@ export default function PublicExamPage() {
             try {
                 // 0. Use the robust check API first
                 const checkStatus = await ExamService.checkExamStatus(slug as string);
-                
+
                 if (checkStatus.error || !checkStatus.quiz) {
-                     console.error('[ExamPage] Exam check failed:', checkStatus.error);
-                     if (checkStatus.error === 'Exam not found' || !checkStatus.quiz) {
-                         setIsNotFound(true);
-                         setIsLoading(false);
-                         return;
-                     }
+                    if (checkStatus.error === 'Exam not found' || !checkStatus.quiz) {
+                        setIsNotFound(true);
+                        setIsLoading(false);
+                        return;
+                    }
                 }
 
                 // 0.1 Check Public Status First (Does not require auth)
                 try {
                     const publicStatus = await ExamService.getExamPublicStatus(slug as string);
                     const startTime = new Date(publicStatus.startTime).getTime();
-                    
+
                     if (Date.now() < startTime) {
                         console.log('[ExamPage] Exam starting soon, redirecting to waiting room');
                         router.replace(`/exam/waiting?slug=${slug}`);
@@ -264,12 +264,12 @@ export default function PublicExamPage() {
                     }
                 } catch (e: any) {
                     console.warn('Failed to check public status', e);
-                    
+
                     if (e.status === 404 || e.message === 'Exam not found') {
-                         console.error('[ExamPage] Exam public status 404. Aborting.');
-                         setIsNotFound(true);
-                         setIsLoading(false);
-                         return;     // Stop execution
+                        console.error('[ExamPage] Exam public status 404. Aborting.');
+                        setIsNotFound(true);
+                        setIsLoading(false);
+                        return;     // Stop execution
                     }
                 }
 
@@ -281,29 +281,29 @@ export default function PublicExamPage() {
 
                     // If NO auth marker AND NO user session, then redirect
                     if (!isAuthorized && !storedUserRaw) {
-                         // Double check if cookie exists via simple fetch? No, cannot check HttpOnly cookie.
-                         // But if we came from login, localStorage should be set.
-                         // Maybe the user is coming back later and localStorage is gone but cookie remains?
-                         // If cookie remains, we should try to fetch the exam and see if it works.
-                         // If it works (200 OK), we can restore localStorage or proceed.
-                         
-                         // BUT, `getExamBySlug` below will do exactly that.
-                         // So maybe we should RELAX this check and let `getExamBySlug` fail with 401 if truly unauth.
-                         
-                         // However, if we remove this, unidentified users will try to fetch exam.
-                         // If `storedUserRaw` is missing, the UI will break mainly because `user` state is null.
-                         // We need `user` object for socket connection.
-                         
-                         // Fix: if no localStorage 'user', try to fetch /auth/me or profile via proxy to restore it?
-                         // Or just redirect.
-                         
-                         // In the loop case: User logs in -> setItem -> redirect -> loadExamData -> getItem.
-                         // This should work.
-                         
-                         // Unless... the slog in `exam_${slug}_auth` differs from `slug` param?
-                         
-                         // Let's degrade this "Redirect Immediately" to "Log Warning" and verify in step 1.
-                         console.log(`[ExamPage] Local auth check failed for ${slug}. Will verify via API.`);
+                        // Double check if cookie exists via simple fetch? No, cannot check HttpOnly cookie.
+                        // But if we came from login, localStorage should be set.
+                        // Maybe the user is coming back later and localStorage is gone but cookie remains?
+                        // If cookie remains, we should try to fetch the exam and see if it works.
+                        // If it works (200 OK), we can restore localStorage or proceed.
+
+                        // BUT, `getExamBySlug` below will do exactly that.
+                        // So maybe we should RELAX this check and let `getExamBySlug` fail with 401 if truly unauth.
+
+                        // However, if we remove this, unidentified users will try to fetch exam.
+                        // If `storedUserRaw` is missing, the UI will break mainly because `user` state is null.
+                        // We need `user` object for socket connection.
+
+                        // Fix: if no localStorage 'user', try to fetch /auth/me or profile via proxy to restore it?
+                        // Or just redirect.
+
+                        // In the loop case: User logs in -> setItem -> redirect -> loadExamData -> getItem.
+                        // This should work.
+
+                        // Unless... the slog in `exam_${slug}_auth` differs from `slug` param?
+
+                        // Let's degrade this "Redirect Immediately" to "Log Warning" and verify in step 1.
+                        console.log(`[ExamPage] Local auth check failed for ${slug}. Will verify via API.`);
                         //  router.replace(`/exam/login?slug=${slug}`);
                         //  return;
                     }
@@ -315,11 +315,11 @@ export default function PublicExamPage() {
                     // If we dont have user object, we can't initialize socket or UI properly.
                     // We must attempt to restore it from server if cookie exists.
                     // Or redirect.
-                    
+
                     // Note: If the user just logged in, storedUserRaw SHOULD be there.
                     // If it is NOT there, maybe the `slug` mismatch caused the Login page to NOT set `exam_${slug}_auth`?
                     // But `user` is global.
-                    
+
                     console.log('No user found in localStorage, redirecting to login');
                     router.replace(`/exam/login?slug=${slug}`);
                     return;
@@ -392,7 +392,7 @@ export default function PublicExamPage() {
                     // POPULATE DATA ONLY AFTER SUCCESSFUL SESSION START
                     if (data.sections) {
                         sectionsToProcess = data.sections; // Assign to the outer variable
-                        
+
                         // Shuffle questions within each section using session ID as seed
                         const seed = stringToSeed(session.id);
                         sectionsToProcess = sectionsToProcess.map((section: any) => {
@@ -553,9 +553,9 @@ export default function PublicExamPage() {
 
                 // Check for 404 specifically
                 if (error.message?.includes('API Error: 404') || error.message?.includes('Not Found') || error.status === 404 || error.message === 'Exam not found') {
-                     setIsNotFound(true);
-                     setIsLoading(false);
-                     return;
+                    setIsNotFound(true);
+                    setIsLoading(false);
+                    return;
                 }
 
                 if (error.message?.includes('EXAM_ALREADY_ACTIVE')) {
@@ -565,6 +565,14 @@ export default function PublicExamPage() {
                 if (error.message?.includes('ACCOUNT_SUSPENDED')) {
                     window.location.href = `/exam/login?slug=${slug}&error=suspended`;
                     return; // Keep loading visible
+                }
+                if (error.message?.includes('Only Student accounts can access exams.')) {
+                    window.location.href = `/exam/login?slug=${slug}&error=not_student`;
+                    return;
+                }
+                if (error.message?.includes('IP address is not whitelisted')) {
+                    window.location.href = `/exam/login?slug=${slug}&error=ip_blocked`;
+                    return;
                 }
                 if (error.message?.includes('401') || error.message?.includes('Unauthorized') || error.message?.includes('Failed to start exam')) {
                     window.location.href = `/exam/login?slug=${slug}`;
@@ -641,13 +649,16 @@ export default function PublicExamPage() {
 
         const timer = setInterval(() => {
             setTimeLeft(prev => {
-                if (prev === null || prev <= 0) return 0;
+                if (prev === null || prev <= 0) {
+                    clearInterval(timer);
+                    return 0;
+                }
                 return prev - 1;
             });
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [timeLeft, submitFullExam]);
+    }, [isFeedbackMode, isSuccessMode, submitFullExam]);
 
     const formatTime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -738,7 +749,8 @@ export default function PublicExamPage() {
 
     const handleAnswerChange = useCallback((answer: any) => {
         const currentAnswer = userAnswersRef.current[currentQuestionId];
-        if (JSON.stringify(currentAnswer) === JSON.stringify(answer)) {
+        // Skip update if strictly equal (handles primitives)
+        if (currentAnswer === answer) {
             return;
         }
 
@@ -1155,7 +1167,7 @@ export default function PublicExamPage() {
     }
 
     if (isLoading && sections.length === 0) {
-        return <Loading />;
+        return <CoursePlayerSkeleton hasSidebar={true} isExamMode={true} />;
     }
 
     return (

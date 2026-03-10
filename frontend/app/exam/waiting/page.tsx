@@ -90,7 +90,7 @@ export default function ExamWaitingRoom() {
     };
 
     return (
-        <div className="h-screen w-full bg-slate-50 flex items-center justify-center font-inter overflow-hidden relative">
+        <div className="h-screen w-full bg-slate-50 flex items-center justify-center font-sans overflow-hidden relative">
 
             {/* Minimal Header with Logo */}
             <div className="absolute top-0 left-0 w-full p-8 z-20">

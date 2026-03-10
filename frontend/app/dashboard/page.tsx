@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { requireAuthClient } from "@/hooks/requireAuthClient";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { redirect } from "next/navigation";
 import { AuthService } from "@/services/api/AuthService";
 
@@ -19,6 +19,6 @@ export default function DashboardPage() {
         else redirect("/dashboard/student");
     }, []);
 
-    if (!authChecked) return <Loading />;
+    if (!authChecked) return <DashboardSkeleton type="main" userRole="student" />;
     return null;
 }

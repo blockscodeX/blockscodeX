@@ -1,23 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class StorageService {
   private s3Client: S3Client;
   private bucketName: string;
+  private cdnUrl: string;
   private readonly logger = new Logger(StorageService.name);
 
   constructor(private configService: ConfigService) {
-    const region = this.configService.get<string>('S3_REGION') || 'us-east-1';
+    const region = this.configService.get<string>('S3_REGION') || 'sgp1';
     const endpoint = this.configService.get<string>('S3_ENDPOINT') || '';
     const accessKeyId = this.configService.get<string>('S3_ACCESS_KEY') || '';
     const secretAccessKey = this.configService.get<string>('S3_SECRET_KEY') || '';
     this.bucketName = this.configService.get<string>('S3_BUCKET_NAME') || '';
+    // Public CDN/origin URL for the bucket: https://<bucket>.<region>.digitaloceanspaces.com
+    this.cdnUrl =
+      this.configService.get<string>('S3_CDN_URL') ||
+      `https://${this.bucketName}.${region}.digitaloceanspaces.com`;
 
     if (!endpoint || !accessKeyId || !secretAccessKey || !this.bucketName) {
-      this.logger.warn('S3 configuration is missing. File uploads will fail.');
+      this.logger.warn('Storage (DigitalOcean Spaces) configuration is missing. File uploads will fail.');
     }
 
     this.s3Client = new S3Client({
@@ -27,53 +32,105 @@ export class StorageService {
         accessKeyId,
         secretAccessKey,
       },
-      forcePathStyle: true, // Required for Supabase S3
+      // DigitalOcean Spaces uses virtual-hosted-style URLs
+      forcePathStyle: false,
     });
   }
 
-  async uploadFile(file: any, folder: string = 'uploads', bucket?: string): Promise<string> {
+  /**
+   * Upload a file to DigitalOcean Spaces.
+   * @param file  - Fastify multipart part or a compatible object with `filename`, `mimetype`, `toBuffer()`
+   * @param folder - Logical sub-folder inside the bucket (e.g. 'avatars', 'organizations')
+   * @returns Public URL of the uploaded file
+   */
+  async uploadFile(file: any, folder: string = 'uploads'): Promise<string> {
     if (!file) {
       throw new Error('File is required');
     }
 
-    const targetBucket = bucket || this.bucketName;
     const fileExtension = file.filename.split('.').pop();
-    const fileName = `${folder}/${uuidv4()}.${fileExtension}`;
+    const key = `${folder}/${uuidv4()}.${fileExtension}`;
 
-    // Convert stream to buffer if necessary, but @fastify/multipart returns a stream
-    // AWS SDK v3 supports streaming uploads
     const buffer = await file.toBuffer();
 
     const command = new PutObjectCommand({
-      Bucket: targetBucket,
-      Key: fileName,
+      Bucket: this.bucketName,
+      Key: key,
       Body: buffer,
       ContentType: file.mimetype,
-      // ACL: 'public-read', // Supabase S3 does not support ACLs via S3 API in the same way AWS does. 
-      // Bucket policy controls access. Removing ACL to avoid potential errors or silent failures.
+      ACL: 'public-read', // DigitalOcean Spaces supports per-object ACLs
     });
 
     try {
-      this.logger.log(`Uploading file to S3: ${targetBucket}/${fileName}`);
+      this.logger.log(`Uploading file to DigitalOcean Spaces: ${this.bucketName}/${key}`);
       await this.s3Client.send(command);
-      this.logger.log(`File uploaded successfully`);
-      // Construct the public URL
-      // For Supabase: https://<project_ref>.supabase.co/storage/v1/object/public/<bucket>/<key>
-      // Or if using custom S3 endpoint, we might need to construct it differently.
-      // Let's assume standard Supabase URL structure if endpoint contains supabase
-      
-      const endpoint = this.configService.get<string>('S3_ENDPOINT') || '';
-      if (endpoint.includes('supabase')) {
-         // endpoint is usually https://<project_ref>.supabase.co/storage/v1/s3
-         // public url is https://<project_ref>.supabase.co/storage/v1/object/public/<bucket>/<key>
-         const projectUrl = endpoint.replace('/storage/v1/s3', '');
-         return `${projectUrl}/storage/v1/object/public/${targetBucket}/${fileName}`;
-      }
+      this.logger.log(`File uploaded successfully: ${key}`);
 
-      return `${endpoint}/${targetBucket}/${fileName}`;
+      // Public URL: https://<bucket>.<region>.digitaloceanspaces.com/<key>
+      return `${this.cdnUrl}/${key}`;
     } catch (error) {
       this.logger.error(`Failed to upload file: ${error.message}`, error.stack);
       throw error;
+    }
+  }
+
+  /**
+   * Delete a file from DigitalOcean Spaces by its public URL.
+   * Non-throwing: logs errors but doesn't break the caller.
+   */
+  async deleteFile(fileUrl: string): Promise<void> {
+    if (!fileUrl) return;
+
+    try {
+      const key = this.extractKeyFromUrl(fileUrl);
+
+      if (!key) {
+        this.logger.warn(`Could not extract S3 key from URL: ${fileUrl}`);
+        return;
+      }
+
+      const command = new DeleteObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+      });
+
+      this.logger.log(`Deleting file from DigitalOcean Spaces: ${this.bucketName}/${key}`);
+      await this.s3Client.send(command);
+      this.logger.log(`File deleted successfully: ${key}`);
+    } catch (error) {
+      this.logger.error(`Failed to delete file: ${error.message}`, error.stack);
+      // Non-throwing: don't block the caller if cleanup fails
+    }
+  }
+
+  /**
+   * Extract the object key from a DigitalOcean Spaces public URL.
+   * Supports:
+   *  - https://<bucket>.<region>.digitaloceanspaces.com/<key>
+   *  - https://<bucket>.<region>.cdn.digitaloceanspaces.com/<key>
+   *  - Legacy Supabase URLs (graceful fallback for existing stored URLs)
+   */
+  private extractKeyFromUrl(url: string): string | null {
+    try {
+      const urlObj = new URL(url);
+
+      // DigitalOcean Spaces: hostname starts with <bucket>.<region>.digitaloceanspaces.com
+      if (urlObj.hostname.includes('digitaloceanspaces.com')) {
+        // pathname is /<key>, strip leading slash
+        return urlObj.pathname.replace(/^\//, '');
+      }
+
+      // Legacy Supabase fallback: /storage/v1/object/public/<bucket>/<key>
+      const supabaseMatch = url.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
+      if (supabaseMatch) return supabaseMatch[1];
+
+      // Generic fallback: skip first path segment (assumed to be bucket)
+      const parts = urlObj.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) return parts.slice(1).join('/');
+
+      return null;
+    } catch {
+      return null;
     }
   }
 }

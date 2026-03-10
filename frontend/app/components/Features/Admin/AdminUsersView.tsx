@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { siteConfig } from "@/app/config/site";
 import { UserPlus, Search, Filter, Mail, UserMinus, ChevronRight, Laptop, Trash2, AlertTriangle, X, CheckCircle, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import UserManagementModal from "@/app/components/Common/UserManagementModal";
@@ -9,6 +10,17 @@ import { AdminService } from "@/services/api/AdminService";
 import { AuthService } from "@/services/api/AuthService";
 import { useEffect } from "react";
 import { useToast } from "@/app/components/Common/Toast";
+
+interface User {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    rollNumber?: string | null;
+    department?: string | null;
+    dept?: string | null; // For compatibility
+}
 
 interface AdminUsersViewProps {
     basePath?: string;
@@ -151,7 +163,10 @@ export default function AdminUsersView({ basePath, organizationId }: AdminUsersV
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-black text-slate-800">{user.name}</p>
-                                                    <p className="text-[11px] font-bold text-slate-400 lowercase tracking-tight">{user.email}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded-md">{user.rollNumber || "NO ID"}</span>
+                                                        <p className="text-[11px] font-bold text-slate-400 lowercase tracking-tight">{user.email}</p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -159,7 +174,7 @@ export default function AdminUsersView({ basePath, organizationId }: AdminUsersV
                                             <div className="flex items-center gap-2 mb-1">
                                                 <RoleBadge role={user.role} />
                                             </div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{user.dept} Department</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{user.department || user.dept || "No"} Department</p>
                                         </td>
                                         <td className="px-8 py-6">
                                             <div className="flex items-center gap-2">
@@ -217,7 +232,7 @@ export default function AdminUsersView({ basePath, organizationId }: AdminUsersV
             <UserManagementModal
                 isOpen={isUserModalOpen}
                 onClose={() => setIsUserModalOpen(false)}
-                orgName="BlocksCode University"
+                orgName={siteConfig.adminSettingsOrgName}
                 onImport={(data: any[]) => setUsers(prev => [...data, ...prev])}
             />
 

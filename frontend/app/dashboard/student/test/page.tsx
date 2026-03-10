@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import Loading from "@/app/loading";
+import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import Navbar from "@/app/components/Navbar";
 import { StudentService } from "@/services/api/StudentService";
 
@@ -23,7 +23,7 @@ export default function TestAttemptsPage() {
     }, []);
 
     if (loading) {
-        return <Loading />;
+        return <DashboardSkeleton type="list" userRole="student" />;
     }
     return (
         <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-[var(--brand-light)] selection:text-[var(--brand-dark)]">
@@ -76,7 +76,7 @@ export default function TestAttemptsPage() {
                                 <tr key={att.id} className="hover:bg-slate-50/40 transition-colors group">
                                     <td className="px-6 py-5">
                                         {att.isPublished ? (
-                                            <a 
+                                            <a
                                                 href={`/dashboard/student/test/${att.id}/result`}
                                                 className="text-sm font-bold text-[var(--brand-dark)] hover:text-[var(--brand)] cursor-pointer transition-colors block"
                                             >
@@ -103,7 +103,7 @@ export default function TestAttemptsPage() {
                                     </td>
                                     <td className="px-6 py-5">
                                         {att.isPublished ? (
-                                            <a 
+                                            <a
                                                 href={`/dashboard/student/test/${att.id}/result`}
                                                 className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-[var(--brand)] bg-[var(--brand-light)]/10 hover:bg-[var(--brand-light)]/20 rounded-lg transition-colors"
                                             >

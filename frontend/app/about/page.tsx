@@ -1,5 +1,7 @@
 "use client"
 
+import { siteConfig } from "../config/site"
+
 import { motion, useInView } from "motion/react"
 import { useRef } from "react"
 import {
@@ -131,7 +133,7 @@ function HeroSection() {
                             transition={{ delay: 0.2 }}
                         >
                             <Shield className="w-4 h-4 text-blue-600" />
-                            <span className="text-blue-700 text-sm font-medium">Blockscode</span>
+                            <span className="text-blue-700 text-sm font-medium">{siteConfig.name}</span>
                         </motion.div>
                     </Link>
 
@@ -223,7 +225,7 @@ function TheFounders() {
             name: "---",
             image: "/professional-nepali-male-founder-portrait-tech.jpg",
             description:
-                "--- founded Blockscode with a clear mission: to give Nepalese students the practical skills and opportunities they need to compete globally.",
+                `--- founded ${siteConfig.company} with a clear mission: to give Nepalese students the practical skills and opportunities they need to compete globally.`,
             highlights: [
                 "Pioneering practical tech education in Nepal",
                 "Creating pathways from learning to employment",
@@ -341,7 +343,7 @@ function HowItStarted() {
             title: "Building the Bridge",
             location: "Kathmandu",
             description:
-                "That frustration became fuel. --- and --- founded Blockscode with a radical idea: what if education could be different? They built a platform focused on real projects, practical skills, and secure assessments — shifting the entire paradigm from memorizing answers to solving problems.",
+                `That frustration became fuel. --- and --- founded ${siteConfig.company} with a radical idea: what if education could be different? They built a platform focused on real projects, practical skills, and secure assessments — shifting the entire paradigm from memorizing answers to solving problems.`,
             emotion: "The courage to start something new",
             icon: Wrench,
             color: "from-blue-600 to-sky-500",
@@ -734,7 +736,7 @@ function Offerings() {
             title: "For Universities & Institutions",
             subtitle: "Upgrade Your Campus",
             description:
-                "Partner with Blockscode to bring project-based learning that works. Get seamless curriculum tools, automated assessments, student dashboards, and full support to focus on outcomes, not exams.",
+                `Partner with ${siteConfig.company} to bring project-based learning that works. Get seamless curriculum tools, automated assessments, student dashboards, and full support to focus on outcomes, not exams.`,
             features: [
                 { title: "Curriculum Integration", desc: "Infuse real-world projects into your existing coursework." },
                 { title: "Learning Platform", desc: "Track and monitor every student's skill development in real-time." },
@@ -953,7 +955,7 @@ function OurBacking() {
                             <strong className="text-gray-900">let's build it together.</strong>
                         </p>
                         <p className="text-gray-900 font-medium text-lg">
-                            Blockscode is here to turn motivated learners into world-class professionals.
+                            {siteConfig.name} is here to turn motivated learners into world-class professionals.
                         </p>
                         <Link
                             href="/contact"
@@ -976,18 +978,18 @@ function OurBacking() {
                     {/* Brand */}
                     <div className="flex items-center gap-2 sm:gap-3">
                         <div className="relative">
-                            <div className="relative w-9 h-9 sm:w-10 sm:h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                                <Code2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                            <div className="relative w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-lg flex items-center justify-center p-1">
+                                <img src={siteConfig.logo} alt={siteConfig.name} className="w-full h-full object-contain" />
                             </div>
                         </div>
                         <div className="text-left">
-                            <h4 className="text-white text-sm sm:text-base font-semibold">Blockscode</h4>
+                            <h4 className="text-white text-sm sm:text-base font-semibold">{siteConfig.name}</h4>
                             <p className="text-blue-200 text-[10px] sm:text-xs">Powering Nepal's Tech Talent for the World</p>
                         </div>
                     </div>
 
                     {/* Copyright */}
-                    <p className="text-blue-200 text-xs">© 2025 Blockscode</p>
+                    <p className="text-blue-200 text-xs">© {new Date().getFullYear()} {siteConfig.company}</p>
                 </div>
             </motion.div>
         </section>

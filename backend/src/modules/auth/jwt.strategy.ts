@@ -48,6 +48,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 orgId: true,
                 profilePicture: true, // Fetch profile picture
                 name: true,           // Fetch name too as it might be updated
+                rollNumber: true,
+                department: true,
                 mustChangePassword: true,
                 organization: {
                     select: {
@@ -67,6 +69,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             name: user.name, // Include name
             role: payload.role,
             orgId: user.orgId,
+            rollNumber: user.rollNumber,
+            department: user.department,
             profilePicture: user.profilePicture, // Include profile picture
             features: user.organization?.features || {},
             mustChangePassword: user.mustChangePassword

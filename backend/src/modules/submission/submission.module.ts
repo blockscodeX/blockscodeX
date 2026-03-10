@@ -9,9 +9,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 @Module({
     imports: [
         PrismaModule,
-        BullModule.registerQueue({
-            name: 'submission_queue',
-        }),
+        BullModule.registerQueue(
+            { name: 'submission_queue' },
+            { name: 'student-analytics' }
+        ),
     ],
     controllers: [SubmissionController],
     providers: [SubmissionService, SubmissionProcessor],

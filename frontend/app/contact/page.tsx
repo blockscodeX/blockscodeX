@@ -1,5 +1,7 @@
 "use client"
 
+import { siteConfig } from "../config/site"
+
 import type React from "react"
 
 import { useState, useRef } from "react"
@@ -143,7 +145,7 @@ export default function ContactPage() {
                 <Shield className="w-5 h-5 text-white" />
               </div>
             </div>
-            <span className="text-blue-600 font-semibold text-sm sm:text-base hidden sm:block">BlocksCode</span>
+            <span className="text-blue-600 font-semibold text-sm sm:text-base hidden sm:block">{siteConfig.name}</span>
           </motion.div>
         </motion.div>
 

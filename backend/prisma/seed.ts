@@ -4,8 +4,8 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'superadmin@blockscode.me';
-  const password = 'SuperSecretPassword123!'; // This is the password you will use to login
+  const email = 'xisense@gmail.com';
+  const password = 'admin123'; // This is the password you will use to login
   const hashedPassword = await bcrypt.hash(password, 10);
 
   const superAdmin = await prisma.user.upsert({
@@ -14,7 +14,7 @@ async function main() {
     create: {
       email,
       password: hashedPassword,
-      name: 'Super Admin',
+      name: 'xisense',
       role: Role.SUPER_ADMIN,
       isActive: true,
       mustChangePassword: false,

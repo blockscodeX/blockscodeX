@@ -49,8 +49,9 @@ export interface UnitQuestion {
     // Reading specific
     readingContent?: {
         id: string;
-        type: 'text' | 'code' | 'code-runner';
+        type: 'text' | 'code' | 'code-runner' | 'video';
         content?: string; // HTML for text
+        videoUrl?: string; // S3 URL for video blocks
         codeConfig?: {
             languageId: string;
             initialCode: string;

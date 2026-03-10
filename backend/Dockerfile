@@ -33,4 +33,5 @@ COPY --from=builder /app/prisma ./prisma
 EXPOSE 3000
 
 # Start command
-CMD [  "npm", "run", "start:prod" ]
+# Start command with automatic migrations
+CMD [ "sh", "-c", "npx prisma migrate deploy && npm run start:prod" ]

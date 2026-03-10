@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CodeExecutionController } from './code-execution.controller';
 import { CodeExecutionService } from './code-execution.service';
 import { PistonStrategy } from './strategies/piston.strategy';
+import { Judge0Strategy } from './strategies/judge0.strategy';
 import { HttpModule } from '@nestjs/axios';
 import { PrismaService } from '../../services/prisma/prisma.service';
 import { BullModule } from '@nestjs/bullmq';
@@ -20,10 +21,18 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         CodeExecutionService,
         CodeExecutionProcessor,
         PistonStrategy,
+        Judge0Strategy,
         PrismaService,
         {
             provide: 'IExecutionStrategy', // Use string token for interface injection
-            useClass: PistonStrategy,
+            useFactory: (configService: ConfigService, pistonStrategy: PistonStrategy, judge0Strategy: Judge0Strategy) => {
+                const engine = configService.get<string>('CODE_EXECUTION_ENGINE', 'judge0');
+                if (engine === 'piston') {
+                    return pistonStrategy;
+                }
+                return judge0Strategy; // Default
+            },
+            inject: [ConfigService, PistonStrategy, Judge0Strategy],
         },
     ],
     exports: [CodeExecutionService],

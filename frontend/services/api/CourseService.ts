@@ -92,6 +92,13 @@ export const CourseService = {
                 readingContent = rawReading.map((b: any, idx: number) => {
                     const id = b.id || b.key || `reading-${idx}`;
                     const rawType = (b.type || b.blockType || '').toString().toLowerCase();
+                    if (rawType === 'video' || b.videoUrl) {
+                        return {
+                            id,
+                            type: 'video',
+                            videoUrl: b.videoUrl || b.url || b.src || ''
+                        };
+                    }
                     if (rawType === 'code' || rawType === 'codeblock' || rawType === 'code-runner' || b.code || b.codeConfig || b.language || b.runnerConfig) {
                         const codeConf = b.codeConfig || b.config || b.runnerConfig || {};
                         const language = codeConf.languageId || codeConf.language || b.language || b.lang || (codeConf.runnerLanguage) || 'python';
@@ -205,5 +212,57 @@ export const CourseService = {
             console.error('[CourseService] Error fetching unit', error);
             throw error;
         }
+    },
+
+    async deleteCourseVideo(url: string): Promise<void> {
+        const res = await fetch(`${BASE_URL}/course/video`, {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+        });
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error((error as any).message || 'Failed to delete video');
+        }
+    },
+
+    uploadCourseVideo(file: File, onProgress?: (percent: number) => void): Promise<{ url: string }> {
+        return new Promise((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('video', file);
+
+            const xhr = new XMLHttpRequest();
+            xhr.withCredentials = true;
+
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable && onProgress) {
+                    onProgress(Math.round((event.loaded / event.total) * 100));
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch {
+                        reject(new Error('Invalid response from server'));
+                    }
+                } else {
+                    try {
+                        const err = JSON.parse(xhr.responseText);
+                        reject(new Error(err.message || 'Failed to upload video'));
+                    } catch {
+                        reject(new Error(`Upload failed with status ${xhr.status}`));
+                    }
+                }
+            });
+
+            xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+            xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled')));
+
+            xhr.open('POST', `${BASE_URL}/course/upload-video`);
+            xhr.send(formData);
+        });
     }
 };
