@@ -5,6 +5,7 @@ export class FeatureDisabledError extends Error {
     }
 }
 
+
 export async function handleApiResponse(response: Response) {
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: response.statusText }));
