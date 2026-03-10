@@ -26,31 +26,8 @@ services:
       - S3_SECRET_KEY=${S3_SECRET_KEY}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - exam-network
-
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: nest_postgres
-    restart: always
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-nest_exam_db}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     networks:
       - exam-network
 
@@ -61,6 +38,9 @@ services:
     restart: always
     ports:
       - "6379:6379"
+    # Cap Redis memory usage to 256GB WITHOUT reserving it.
+    # Redis will be able to use up to 256GB if available, but it won't pre-allocate it.
+    command: ["redis-server", "--maxmemory", "256gb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -91,7 +71,6 @@ services:
       - exam-network
 
 volumes:
-  postgres_data:
   redis_data:
 
 networks:
