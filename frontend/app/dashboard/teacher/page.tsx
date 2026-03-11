@@ -199,7 +199,7 @@ function ActionBtn({ label, icon, onClick }: any) {
 
 function SubmissionItem({ name, module, time, status }: any) {
     const displayName = name || "Unknown User";
-    const initial = displayName.charAt(0);
+    const initial = displayName ? displayName.charAt(0) : "?";
 
     return (
         <div className="flex gap-4">

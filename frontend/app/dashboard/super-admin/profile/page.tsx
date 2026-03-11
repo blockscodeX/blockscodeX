@@ -136,7 +136,7 @@ export default function SuperAdminProfilePage() {
                             {avatar ? (
                                 <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
-                                name.charAt(0)
+                                (userData?.name || name || "S").charAt(0)
                             )}
                             {uploadingAvatar && (
                                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">

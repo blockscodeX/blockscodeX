@@ -44,7 +44,7 @@ export default function ExamSuccessView({ userDetails, onDone }: ExamSuccessView
                 <div className="w-full bg-slate-50/80 backdrop-blur-sm rounded-[2.5rem] border border-slate-100 p-10 mb-12 shadow-sm transition-all hover:shadow-md">
                     <div className="flex items-center gap-6 mb-8 border-b border-slate-200/60 pb-8">
                         <div className="w-16 h-16 rounded-full bg-white border border-slate-200 flex items-center justify-center text-2xl font-black text-slate-700 shadow-sm">
-                            {userDetails.name.charAt(0)}
+                            {userDetails.name ? userDetails.name.charAt(0) : "?"}
                         </div>
                         <div>
                             <h2 className="text-2xl font-black text-slate-900">{userDetails.name}</h2>

@@ -10,20 +10,17 @@ tracer.init({
   logInjection: true, // Enables automatic injection of trace IDs into logs
   profiling: true,    // Enables the profiler
   runtimeMetrics: true, // Enables runtime metrics
+
+  // Filter out noisy BullMQ polling commands (BZPOPMIN, EVALSHA) from traces
+  // This helps reduce volume in serverless Redis environments
+  resourceFilters: [
+    /BZPOPMIN/i,
+    /EVALSHA/i
+  ],
+
   // Explicitly point to the agent running in Docker
-  // Since the backend is running on the host (npm run start:dev), it needs to talk to localhost:8126
-  // If the backend was in Docker, it would need to talk to the agent container name
   hostname: process.env.DD_AGENT_HOST || 'localhost',
   port: 8126
-});
-
-// Filter out noisy BullMQ polling commands from Redis traces
-(tracer as any).addFilter((span: any) => {
-  const resource = span.resource?.toUpperCase() || '';
-  if (resource.includes('BZPOPMIN') || resource.includes('EVALSHA')) {
-    return false;
-  }
-  return true;
 });
 
 export default tracer;

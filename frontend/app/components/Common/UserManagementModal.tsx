@@ -72,8 +72,15 @@ export default function UserManagementModal({ isOpen, onClose, orgName, onImport
                 const lines = text.split('\n');
                 // Fields: Name, type-student/teacher/admin, ID, email, department
                 const usersToCreate = lines.slice(1).filter(line => line.trim()).map(line => {
-                    const [name, type, id, email, department] = line.split(',').map(item => item.trim());
-                    return { name, role: type, id, email, dept: department };
+                    const fields = line.split(',').map(item => item.trim());
+                    const [name, type, id, email, department] = fields;
+                    return {
+                        name: name || 'Unknown User',
+                        role: type || 'Student',
+                        id: id || `ID-${Math.random().toString(36).substr(2, 9)}`,
+                        email: email || '',
+                        dept: department || ''
+                    };
                 });
 
                 if (usersToCreate.length === 0) {
