@@ -39,37 +39,41 @@ export class StorageService {
 
   /**
    * Upload a file to DigitalOcean Spaces.
-   * @param file  - Fastify multipart part or a compatible object with `filename`, `mimetype`, `toBuffer()`
-   * @param folder - Logical sub-folder inside the bucket (e.g. 'avatars', 'organizations')
+   * @param fileData - The file content (Buffer, Stream, or Blob)
+   * @param filename - Original filename to extract extension
+   * @param mimetype - Content type of the file
+   * @param folder   - Logical sub-folder inside the bucket
    * @returns Public URL of the uploaded file
    */
-  async uploadFile(file: any, folder: string = 'uploads'): Promise<string> {
-    if (!file) {
-      throw new Error('File is required');
+  async uploadFile(
+    fileData: any,
+    filename: string,
+    mimetype: string,
+    folder: string = 'uploads'
+  ): Promise<string> {
+    if (!fileData) {
+      throw new Error('File data is required');
     }
 
-    const fileExtension = file.filename.split('.').pop();
+    const fileExtension = filename.split('.').pop();
     const key = `${folder}/${uuidv4()}.${fileExtension}`;
-
-    const buffer = await file.toBuffer();
 
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: key,
-      Body: buffer,
-      ContentType: file.mimetype,
-      ACL: 'public-read', // DigitalOcean Spaces supports per-object ACLs
+      Body: fileData,
+      ContentType: mimetype,
+      ACL: 'public-read',
     });
 
     try {
-      this.logger.log(`Uploading file to DigitalOcean Spaces: ${this.bucketName}/${key}`);
+      this.logger.log(`Uploading file ${filename} to DigitalOcean Spaces: ${this.bucketName}/${key}`);
       await this.s3Client.send(command);
       this.logger.log(`File uploaded successfully: ${key}`);
 
-      // Public URL: https://<bucket>.<region>.digitaloceanspaces.com/<key>
       return `${this.cdnUrl}/${key}`;
     } catch (error) {
-      this.logger.error(`Failed to upload file: ${error.message}`, error.stack);
+      this.logger.error(`Failed to upload file ${filename}: ${error.message}`, error.stack);
       throw error;
     }
   }

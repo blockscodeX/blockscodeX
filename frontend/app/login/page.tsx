@@ -35,16 +35,18 @@ export default function LoginPage() {
         try {
             // Use Server Action instead of client-side service
             const result = await loginAction(email, password);
-            
+
             if (!result.success) {
                 throw new Error(result.error);
             }
 
             const user = result.user;
-            
-            // Store token for client-side API calls -> REMOVED
-            // We now rely on Http-Only cookies for security.            
-            
+
+            // Store token for client-side API calls that bypass the proxy (e.g. large file uploads)
+            if (result.access_token) {
+                localStorage.setItem('auth_token', result.access_token);
+            }
+
             // Store user details for UI context
             localStorage.setItem('user', JSON.stringify(user));
 

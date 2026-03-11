@@ -76,13 +76,12 @@ export class AuthController {
                     throw new BadRequestException('Only image files are allowed (JPEG, PNG, GIF, WebP, SVG)');
                 }
 
-                const fileObj = {
-                    filename: part.filename,
-                    mimetype: part.mimetype,
-                    toBuffer: async () => buffer,
-                };
-
-                const url = await this.storageService.uploadFile(fileObj, 'avatars');
+                const url = await this.storageService.uploadFile(
+                    buffer,
+                    part.filename,
+                    part.mimetype,
+                    'avatars'
+                );
                 return this.authService.updateProfile(user.id, { profilePicture: url });
             } else if (part.type === 'file') {
                 await part.toBuffer(); // consume unused file parts

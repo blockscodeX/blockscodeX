@@ -41,7 +41,12 @@ export class SuperAdminController {
             if (part.type === 'file') {
                 if (part.fieldname === 'logo') {
                     console.log('[SuperAdminController] Found logo file, uploading...');
-                    body.logo = await this.storageService.uploadFile(part, 'organizations');
+                    body.logo = await this.storageService.uploadFile(
+                        part.file,
+                        part.filename,
+                        part.mimetype,
+                        'organizations'
+                    );
                     console.log('[SuperAdminController] Logo uploaded:', body.logo);
                 } else {
                     await part.toBuffer(); // consume unused file
@@ -58,7 +63,7 @@ export class SuperAdminController {
                 }
             }
         }
-        
+
         console.log('[SuperAdminController] Final body:', body);
         return this.superAdminService.createOrganization(body);
     }

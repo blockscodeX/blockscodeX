@@ -25,7 +25,7 @@ export const CourseService = {
         try {
             console.log('[CourseService] GET course', slug);
             const res = await authFetch(`/course/${slug}`);
-            
+
             if (!res.ok) {
                 let body: any = null;
                 try { body = await res.json(); } catch (e) { body = await res.text(); }
@@ -43,7 +43,7 @@ export const CourseService = {
         try {
             console.log('[CourseService] GET unit', id);
             const res = await authFetch(`/course/unit/${id}`);
-            
+
             if (!res.ok) {
                 let body: any = null;
                 try { body = await res.json(); } catch (e) { body = await res.text(); }
@@ -261,7 +261,19 @@ export const CourseService = {
             xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
             xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled')));
 
-            xhr.open('POST', `${BASE_URL}/course/upload-video`);
+            // Bypass Proxy for large video uploads to avoid Vercel 4.5MB limit
+            // Use direct backend URL if provided, otherwise fallback to proxy
+            const directBackendUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/$/, "");
+            const uploadUrl = `${directBackendUrl}/course/upload-video`;
+
+            xhr.open('POST', uploadUrl);
+
+            // Add Authorization header if token exists in localStorage (proxy bypass)
+            const token = AuthService.getToken();
+            if (token) {
+                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            }
+
             xhr.send(formData);
         });
     }
