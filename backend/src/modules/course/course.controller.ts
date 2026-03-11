@@ -37,6 +37,9 @@ export class CourseController {
         }
 
         const parts = multipartReq.parts();
+        const fileSizeHeader = req.headers['x-file-size'];
+        const fileSize = fileSizeHeader ? parseInt(fileSizeHeader as string, 10) : undefined;
+
         for await (const part of parts) {
             if (part.type === 'file' && part.fieldname === 'video') {
                 if (!ALLOWED_VIDEO_TYPES.includes(part.mimetype)) {
@@ -44,12 +47,18 @@ export class CourseController {
                     throw new BadRequestException('Only video files are allowed (MP4, WebM, OGG, MOV)');
                 }
 
+                if (fileSize && fileSize > MAX_VIDEO_SIZE) {
+                    await part.toBuffer(); // consume
+                    throw new BadRequestException('Video file size must be less than 500MB');
+                }
+
                 // Use part.file (which is a Readable stream) to avoid loading the whole file into memory
                 const url = await this.storageService.uploadFile(
                     part.file,
                     part.filename,
                     part.mimetype,
-                    'courseVideos'
+                    'courseVideos',
+                    fileSize
                 );
                 return { url };
             } else if (part.type === 'file') {

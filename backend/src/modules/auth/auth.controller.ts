@@ -80,7 +80,8 @@ export class AuthController {
                     buffer,
                     part.filename,
                     part.mimetype,
-                    'avatars'
+                    'avatars',
+                    buffer.length
                 );
                 return this.authService.updateProfile(user.id, { profilePicture: url });
             } else if (part.type === 'file') {

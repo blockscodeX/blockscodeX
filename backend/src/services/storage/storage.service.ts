@@ -39,17 +39,19 @@ export class StorageService {
 
   /**
    * Upload a file to DigitalOcean Spaces.
-   * @param fileData - The file content (Buffer, Stream, or Blob)
-   * @param filename - Original filename to extract extension
-   * @param mimetype - Content type of the file
-   * @param folder   - Logical sub-folder inside the bucket
+   * @param fileData       - The file content (Buffer, Stream, or Blob)
+   * @param filename       - Original filename to extract extension
+   * @param mimetype       - Content type of the file
+   * @param folder         - Logical sub-folder inside the bucket
+   * @param contentLength  - Length of the content in bytes (optional, but recommended for streams)
    * @returns Public URL of the uploaded file
    */
   async uploadFile(
     fileData: any,
     filename: string,
     mimetype: string,
-    folder: string = 'uploads'
+    folder: string = 'uploads',
+    contentLength?: number
   ): Promise<string> {
     if (!fileData) {
       throw new Error('File data is required');
@@ -63,6 +65,7 @@ export class StorageService {
       Key: key,
       Body: fileData,
       ContentType: mimetype,
+      ContentLength: contentLength,
       ACL: 'public-read',
     });
 

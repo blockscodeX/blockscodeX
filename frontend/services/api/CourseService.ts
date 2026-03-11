@@ -274,6 +274,9 @@ export const CourseService = {
                 xhr.setRequestHeader('Authorization', `Bearer ${token}`);
             }
 
+            // Add File Size header to help backend handle stream length (fixes 500 error with dd-trace)
+            xhr.setRequestHeader('X-File-Size', file.size.toString());
+
             xhr.send(formData);
         });
     }

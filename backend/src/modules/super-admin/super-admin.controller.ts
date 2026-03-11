@@ -41,11 +41,15 @@ export class SuperAdminController {
             if (part.type === 'file') {
                 if (part.fieldname === 'logo') {
                     console.log('[SuperAdminController] Found logo file, uploading...');
+                    const fileSizeHeader = req.headers['x-file-size'];
+                    const fileSize = fileSizeHeader ? parseInt(fileSizeHeader as string, 10) : undefined;
+
                     body.logo = await this.storageService.uploadFile(
                         part.file,
                         part.filename,
                         part.mimetype,
-                        'organizations'
+                        'organizations',
+                        fileSize
                     );
                     console.log('[SuperAdminController] Logo uploaded:', body.logo);
                 } else {
