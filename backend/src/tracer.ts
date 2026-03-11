@@ -11,16 +11,15 @@ tracer.init({
   profiling: true,    // Enables the profiler
   runtimeMetrics: true, // Enables runtime metrics
 
-  // Filter out noisy BullMQ polling commands (BZPOPMIN, EVALSHA) from traces
-  // This helps reduce volume in serverless Redis environments
-  resourceFilters: [
-    /BZPOPMIN/i,
-    /EVALSHA/i
-  ],
-
   // Explicitly point to the agent running in Docker
   hostname: process.env.DD_AGENT_HOST || 'localhost',
   port: 8126
+});
+
+// Filter out noisy BullMQ polling commands (BZPOPMIN, EVALSHA) from ioredis
+// Commands in blocklist should be lowercase as per dd-trace documentation
+tracer.use('ioredis', {
+  blocklist: ['bzpopmin', 'evalsha']
 });
 
 export default tracer;
