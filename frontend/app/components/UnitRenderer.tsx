@@ -352,6 +352,7 @@ export function UnitRendererComponent({
                 const maxSelections = question.type === 'MultiSelect' ? (correctCount > 0 ? correctCount : undefined) : 1;
                 return (
                     <MCQOptions
+                        key={`mcq-${question.id}`}
                         options={question.mcqOptions || []}
                         multiSelect={question.type === 'MultiSelect'}
                         maxSelections={maxSelections}
@@ -366,6 +367,7 @@ export function UnitRendererComponent({
             case 'Coding':
                 return (
                     <CodingQuestionRenderer
+                        key={`coding-${question.id}`}
                         question={question}
                         hasAttemptSelected={hasAttemptSelected}
                         attemptAnswer={attemptAnswer}
@@ -387,6 +389,7 @@ export function UnitRendererComponent({
             case 'Web':
                 return (
                     <WebEditor
+                        key={`web-${question.id}`}
                         initialHTML={hasAttemptSelected ? attemptAnswer?.html || '' : (currentAnswer?.html ?? question.webConfig?.initialHTML)}
                         initialCSS={hasAttemptSelected ? attemptAnswer?.css || '' : (currentAnswer?.css ?? question.webConfig?.initialCSS)}
                         initialJS={hasAttemptSelected ? attemptAnswer?.js || '' : (currentAnswer?.js ?? question.webConfig?.initialJS)}
@@ -402,6 +405,7 @@ export function UnitRendererComponent({
             case 'Notebook':
                 return (
                     <PythonNotebook
+                        key={`notebook-${question.id}`}
                         initialCode={hasAttemptSelected ? attemptAnswer : (currentAnswer ?? question.notebookConfig?.initialCode)}
                         fontSize={contentFontSize}
                         onChange={onAnswerChange}
@@ -474,6 +478,7 @@ export function UnitRendererComponent({
                                 {activeTab === 'question' ? (
                                     <>
                                         <ProblemStatement
+                                            key={`ps-${question.id}`}
                                             title={question.title}
                                             difficulty={question.difficulty || 'Easy'}
                                             topic={question.topic || 'General'}
@@ -553,4 +558,8 @@ function arePropsEqual(prevProps: UnitRendererProps, nextProps: UnitRendererProp
     return true;
 }
 
-export default React.memo(UnitRendererComponent, arePropsEqual);
+const MemoizedUnitRenderer = React.memo(UnitRendererComponent, arePropsEqual);
+
+export default function UnitRenderer(props: UnitRendererProps) {
+    return <MemoizedUnitRenderer key={`unit-renderer-${props.question.id}`} {...props} />;
+}

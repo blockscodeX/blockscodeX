@@ -118,9 +118,14 @@ export class AuthService {
         });
     }
 
-    async examLogin(email: string, testCode: string, password?: string) {
+    async examLogin(email: string, testCode: string, password?: string, slug?: string) {
+        let whereClause: any = { testCode };
+        if (slug) {
+            whereClause.slug = slug;
+        }
+
         const exam = await this.prisma.exam.findFirst({
-            where: { testCode }
+            where: whereClause
         });
         if (!exam) throw new UnauthorizedException('Invalid test code');
 

@@ -39,8 +39,8 @@ export class AuthController {
     }
 
     @Post('exam-login')
-    async examLogin(@Body() data: { email: string; testCode: string; password?: string }) {
-        return this.authService.examLogin(data.email, data.testCode, data.password);
+    async examLogin(@Body() data: { email: string; testCode: string; password?: string; slug?: string }) {
+        return this.authService.examLogin(data.email, data.testCode, data.password, data.slug);
     }
 
     @Post('forgot-password')

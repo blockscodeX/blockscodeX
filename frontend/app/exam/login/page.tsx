@@ -87,7 +87,7 @@ export default function ExamLoginPage() {
         setError('');
         try {
             // Secure Server Action - Sets HttpOnly Cookie
-            const result = await examLoginAction(email, testCode, password);
+            const result = await examLoginAction(email, testCode, password, slugFromQuery);
 
             if (!result.success) {
                 throw new Error(result.error);
