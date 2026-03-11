@@ -178,6 +178,19 @@ export class SubmissionProcessor extends WorkerHost {
                 }
             }
 
+            // Step A: Save the actual answers (merge with existing JSONB)
+            // This is critical, otherwise the frontend will get empty answers on reload
+            if (Object.keys(answer).length > 0) {
+                await this.prisma.$executeRawUnsafe(
+                    `UPDATE "ExamSession" 
+                     SET "answers" = COALESCE("answers", '{}'::jsonb) || $1::jsonb,
+                         "updatedAt" = NOW()
+                     WHERE "id" = $2`,
+                    JSON.stringify(answer),
+                    sessionId
+                );
+            }
+
             // 2. Merge marks with existing marks (Fetch-Modify-Save pattern)
             // We need to fetch current answers to merge _internal_marks correctly
             // Note: This loses strict atomicity but is necessary for deep merge of _internal_marks
