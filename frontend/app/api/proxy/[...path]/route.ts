@@ -45,25 +45,32 @@ async function handleRequest(request: NextRequest, params: Promise<{ path: strin
     }
 
     const url = new URL(`${BASE_URL}/${pathString}${request.nextUrl.search}`);
+    console.log(`[Proxy] Forwarding to: ${url.href}`);
 
     // Prevent SSRF via path traversal (e.g. `../../../`)
     if (!url.href.startsWith(BASE_URL)) {
         return NextResponse.json({ message: 'Invalid API Path' }, { status: 400 });
     }
 
-    // Read body as ArrayBuffer to ensure intact data transmission
-    // This avoids issues with streaming implementation mismatches
+    // Use request.body as a stream to avoid loading large files into memory
     const body = (request.method !== 'GET' && request.method !== 'HEAD')
-        ? await request.arrayBuffer()
+        ? request.body
         : undefined;
 
+    // Next.js Route Handlers have a default body size limit that can be bypassed 
+    // by not consuming the body as JSON/Text, but streaming it.
+    // However, some fetch implementations require 'duplex: "half"' for streaming bodies.
+    const fetchOptions: any = {
+        method: request.method,
+        headers,
+        body,
+        cache: 'no-store',
+        // @ts-ignore - duplex is required for streaming bodies in some environments
+        duplex: body ? 'half' : undefined
+    };
+
     try {
-        const response = await fetch(url.href, {
-            method: request.method,
-            headers,
-            body,
-            cache: 'no-store'
-        });
+        const response = await fetch(url.href, fetchOptions);
 
         // Filter headers to avoid Content-Encoding issues since fetch auto-decompresses
         const responseHeaders = new Headers(response.headers);
