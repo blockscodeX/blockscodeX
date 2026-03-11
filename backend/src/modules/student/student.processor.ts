@@ -3,7 +3,11 @@ import { Job } from 'bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../services/prisma/prisma.service';
 
-@Processor('student-analytics')
+@Processor('student-analytics', {
+    // Optimize for serverless Redis (reduce command usage)
+    stalledInterval: 300000, // 5 minutes
+    maxStalledCount: 3,
+})
 @Injectable()
 export class StudentProcessor extends WorkerHost {
     private readonly logger = new Logger(StudentProcessor.name);
