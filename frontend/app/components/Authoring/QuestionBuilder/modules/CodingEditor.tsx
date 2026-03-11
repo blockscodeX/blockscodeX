@@ -21,6 +21,7 @@ interface Template {
 interface CodingConfig {
     templates: Record<string, Template>;
     testCases: any[];
+    showTestCases?: boolean;
 }
 
 export default function CodingEditor({ question, onChange }: CodingEditorProps) {
@@ -29,31 +30,35 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
             javascript: { head: '', body: '// Write your code here', tail: '', solution: '' },
             python: { head: '', body: '# Write your code here', tail: '', solution: '' }
         },
-        testCases: []
+        testCases: [],
+        showTestCases: true
     };
 
     // Use local state to prevent stale closure issues during rapid edits
     const [config, setConfig] = useState<CodingConfig>(() => {
-        const base = question.codingConfig || defaultConfig;
+        const base = question.codingConfig;
+        if (!base) return defaultConfig;
         return {
             ...base,
-            templates: {
-                ...defaultConfig.templates,
-                ...(base.templates || {})
-            }
+            templates: base.templates && Object.keys(base.templates).length > 0 ? base.templates : defaultConfig.templates,
+            testCases: base.testCases || [],
+            showTestCases: base.showTestCases ?? true
         };
     });
 
     // Only sync from props when the question ID changes (e.g. switching questions)
     // This avoids overwriting local progress with stale props during the render loop
     React.useEffect(() => {
-        const base = question.codingConfig || defaultConfig;
+        const base = question.codingConfig;
+        if (!base) {
+            setConfig(defaultConfig);
+            return;
+        }
         setConfig({
             ...base,
-            templates: {
-                ...defaultConfig.templates,
-                ...(base.templates || {})
-            }
+            templates: base.templates && Object.keys(base.templates).length > 0 ? base.templates : defaultConfig.templates,
+            testCases: base.testCases || [],
+            showTestCases: base.showTestCases ?? true
         });
     }, [question.id]);
 
@@ -62,24 +67,26 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
     const [activeTemplateSection, setActiveTemplateSection] = useState<'head' | 'body' | 'tail' | 'solution'>('body');
     const [expandedTestCase, setExpandedTestCase] = useState<number | null>(null);
 
-    const updateConfig = (updates: any) => {
-        const newConfig = { ...config, ...updates };
+    const configRef = React.useRef(config);
+    configRef.current = config;
+
+    const updateTemplate = (lang: string, field: 'head' | 'body' | 'tail' | 'solution', value: string) => {
+        const prev = configRef.current;
+        const currentLangTemplates = prev.templates[lang] || { head: '', body: '', tail: '', solution: '' };
+        const newConfig = {
+            ...prev,
+            templates: {
+                ...prev.templates,
+                [lang]: { ...currentLangTemplates, [field]: value }
+            }
+        };
         setConfig(newConfig);
         onChange({ codingConfig: newConfig });
     };
 
-    const updateTemplate = (lang: string, field: 'head' | 'body' | 'tail' | 'solution', value: string) => {
-        const currentLangTemplates = config.templates[lang] || { head: '', body: '', tail: '', solution: '' };
-        updateConfig({
-            templates: {
-                ...config.templates,
-                [lang]: { ...currentLangTemplates, [field]: value }
-            }
-        });
-    };
-
     const toggleLanguageSupport = (langId: string) => {
-        const newTemplates = { ...config.templates };
+        const prev = configRef.current;
+        const newTemplates = { ...prev.templates };
         if (newTemplates[langId]) {
             if (Object.keys(newTemplates).length > 1) {
                 delete newTemplates[langId];
@@ -99,15 +106,18 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
             };
             setActiveLang(langId);
         }
-        updateConfig({ templates: newTemplates });
+        const newConfig = { ...prev, templates: newTemplates };
+        setConfig(newConfig);
+        onChange({ codingConfig: newConfig });
     };
 
     const addTestCase = () => {
+        const prev = configRef.current;
         const newTestCase = { input: "", output: "", isPublic: false, points: 5 };
-        const newTestCases = [...(config.testCases || []), newTestCase];
+        const newTestCases = [...(prev.testCases || []), newTestCase];
         const newMarks = newTestCases.reduce((acc, tc) => acc + (tc.points || 0), 0);
 
-        const newConfig = { ...config, testCases: newTestCases };
+        const newConfig = { ...prev, testCases: newTestCases };
         setConfig(newConfig);
         onChange({
             codingConfig: newConfig,
@@ -117,10 +127,11 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
     };
 
     const removeTestCase = (index: number) => {
-        const newTestCases = (config.testCases || []).filter((_, i) => i !== index);
+        const prev = configRef.current;
+        const newTestCases = (prev.testCases || []).filter((_, i) => i !== index);
         const newMarks = newTestCases.reduce((acc, tc) => acc + (tc.points || 0), 0);
 
-        const newConfig = { ...config, testCases: newTestCases };
+        const newConfig = { ...prev, testCases: newTestCases };
         setConfig(newConfig);
         onChange({
             codingConfig: newConfig,
@@ -130,10 +141,11 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
     };
 
     const updateTestCase = (index: number, updates: any) => {
-        const newTestCases = (config.testCases || []).map((tc: any, i: number) => i === index ? { ...tc, ...updates } : tc);
+        const prev = configRef.current;
+        const newTestCases = (prev.testCases || []).map((tc: any, i: number) => i === index ? { ...tc, ...updates } : tc);
         const newMarks = newTestCases.reduce((acc: any, tc: any) => acc + (tc.points || 0), 0);
 
-        const newConfig = { ...config, testCases: newTestCases };
+        const newConfig = { ...prev, testCases: newTestCases };
         setConfig(newConfig);
         onChange({
             codingConfig: newConfig,
@@ -269,13 +281,29 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
                         </h4>
                         <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Total Question Points: <span className="text-[var(--brand)]">{question.marks || 0}</span></p>
                     </div>
-                    <button
-                        onClick={addTestCase}
-                        className="flex items-center gap-2 px-4 py-2 bg-[var(--brand)] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 shadow-lg shadow-[var(--brand)]/20 transition-all active:scale-95"
-                    >
-                        <Plus size={14} strokeWidth={3} />
-                        Add New Case
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => {
+                                const newVal = !config.showTestCases;
+                                const newTestCases = (config.testCases || []).map(tc => ({ ...tc, isPublic: newVal }));
+                                setConfig(prev => ({ ...prev, showTestCases: newVal, testCases: newTestCases }));
+                                onChange({
+                                    codingConfig: { ...config, showTestCases: newVal, testCases: newTestCases }
+                                });
+                            }}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-all ${config.showTestCases ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
+                        >
+                            {config.showTestCases ? <Eye size={12} /> : <EyeOff size={12} />}
+                            <span className="text-[10px] font-black uppercase tracking-widest">{config.showTestCases ? 'Show All' : 'Hide All'}</span>
+                        </button>
+                        <button
+                            onClick={addTestCase}
+                            className="flex items-center gap-2 px-4 py-2 bg-[var(--brand)] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 shadow-lg shadow-[var(--brand)]/20 transition-all active:scale-95"
+                        >
+                            <Plus size={14} strokeWidth={3} />
+                            Add New Case
+                        </button>
+                    </div>
                 </div>
 
                 <div className="space-y-3">
@@ -298,7 +326,16 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {tc.isPublic ? <Eye size={14} className="text-slate-400" /> : <EyeOff size={14} className="text-amber-500" />}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateTestCase(index, { isPublic: !tc.isPublic });
+                                            }}
+                                            className={`p-1.5 rounded-lg transition-colors ${tc.isPublic ? 'text-[var(--brand)] hover:bg-[var(--brand-light)]/50' : 'text-slate-400 hover:bg-slate-100'}`}
+                                            title={tc.isPublic ? "Make Hidden" : "Make Public"}
+                                        >
+                                            {tc.isPublic ? <Eye size={14} /> : <EyeOff size={14} />}
+                                        </button>
                                         <ChevronDown size={16} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     </div>
                                 </div>

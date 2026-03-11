@@ -904,8 +904,8 @@ export class TeacherService {
                     completedCount === totalUnits && totalUnits > 0
                         ? 'Completed'
                         : completedCount > 0
-                        ? 'In Progress'
-                        : 'Not Started';
+                            ? 'In Progress'
+                            : 'Not Started';
 
                 // @ts-ignore
                 await this.prisma.courseProgress.upsert({
@@ -1198,48 +1198,64 @@ export class TeacherService {
     }
 
     async terminateExamSession(examId: string, studentId: string, user: any) {
-        // Verify ownership
-        const exam = await this.prisma.exam.findUnique({ where: { id: examId } });
+        // Verify ownership (Handle both ID and Slug)
+        const isUuid = this.isUUID(examId);
+        let exam = await this.prisma.exam.findUnique({
+            where: isUuid ? { id: examId } : { slug: examId }
+        });
+
         if (!exam) throw new Error('Exam not found');
         this.checkAccess(exam, user);
 
+        const realExamId = exam.id;
+        const examSlug = exam.slug;
+
         // Find sessions to invalidate cache
         const sessions = await this.prisma.examSession.findMany({
-            where: { examId, userId: studentId }
+            where: { examId: realExamId, userId: studentId }
         });
 
         // Update session status
         await this.prisma.examSession.updateMany({
-            where: { examId, userId: studentId },
+            where: { examId: realExamId, userId: studentId },
             data: { status: 'TERMINATED', endTime: new Date() }
         });
 
         // Invalidate caches
         for (const session of sessions) {
             await this.redis.del(`session:status:${session.id}`);
-            await this.redis.del(`session:meta:${session.id}`); // Clear processor cache
+            await this.redis.del(`session:meta:${session.id}`);
         }
 
-        // Force kick via websocket
-        await this.monitoringGateway.forceTerminate(examId, studentId);
+        // Force kick via websocket - broadcast to both slug and ID rooms for maximum robustness
+        await this.monitoringGateway.forceTerminate(realExamId, studentId);
+        if (examSlug && examSlug !== realExamId) {
+            await this.monitoringGateway.forceTerminate(examSlug, studentId);
+        }
 
         return { success: true };
     }
 
     async unterminateExamSession(examId: string, studentId: string, user: any) {
-        // Verify ownership
-        const exam = await this.prisma.exam.findUnique({ where: { id: examId } });
+        // Verify ownership (Handle both ID and Slug)
+        const isUuid = this.isUUID(examId);
+        let exam = await this.prisma.exam.findUnique({
+            where: isUuid ? { id: examId } : { slug: examId }
+        });
+
         if (!exam) throw new Error('Exam not found');
         this.checkAccess(exam, user);
 
+        const realExamId = exam.id;
+
         // Find sessions to invalidate cache
         const sessions = await this.prisma.examSession.findMany({
-            where: { examId, userId: studentId }
+            where: { examId: realExamId, userId: studentId }
         });
 
         // Update session status back to IN_PROGRESS
         await this.prisma.examSession.updateMany({
-            where: { examId, userId: studentId },
+            where: { examId: realExamId, userId: studentId },
             data: { status: 'IN_PROGRESS', endTime: null }
         });
 

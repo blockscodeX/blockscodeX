@@ -44,14 +44,16 @@ export class CodeExecutionService {
         }
     }
 
-    async submitCode(unitId: string, language: string, code: string, examId?: string) {
+    async submitCode(unitId: string, language: string, code: string, examId?: string, testCasesBody?: any[]) {
         let testCases: any[] = [];
 
-        if (examId) {
+        if (testCasesBody && Array.isArray(testCasesBody)) {
+            testCases = testCasesBody;
+        } else if (examId) {
             // PERFORMANCE: Cache exam questions to avoid fetching large JSON blobs on every run
             const cacheKey = `exam:questions:${examId}`;
             const cachedQuestions = await this.redis.get(cacheKey);
-            
+
             let questionsData: any = null;
 
             if (cachedQuestions) {
@@ -72,7 +74,7 @@ export class CodeExecutionService {
                     throw new NotFoundException('Exam not found');
                 }
                 questionsData = exam.questions;
-                
+
                 // Cache for 10 minutes - exam content rarely changes during the exam
                 // We use both ID and Slug as key to ensure hits
                 await this.redis.set(`exam:questions:${exam.id}`, JSON.stringify(questionsData), 'EX', 600);

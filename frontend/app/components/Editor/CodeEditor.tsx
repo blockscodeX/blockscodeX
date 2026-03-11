@@ -120,7 +120,7 @@ export default function CodeEditor(props: CodeEditorProps) {
 
             if (props.actions?.onRun) {
                 const result = await props.actions.onRun(code, inputToRun, expectedOutput, indexToPass);
-                
+
                 // If result is returned (it should be now), use it to switch tabs
                 if (result && typeof result === 'object') {
                     if (result.error) {
@@ -141,7 +141,7 @@ export default function CodeEditor(props: CodeEditorProps) {
                     }
                 }
             }
-            
+
             setIsTerminalOpen(true);
         }
     };
@@ -455,33 +455,35 @@ export default function CodeEditor(props: CodeEditorProps) {
                                         )}
                                     </button>
 
-                                    <button
-                                        onClick={async () => {
-                                            if (view) {
-                                                if (props.actions?.onSubmit) {
-                                                    const result = await props.actions.onSubmit(view.state.doc.toString());
-                                                    
-                                                    // If result is returned, use it to switch tabs
-                                                    if (result && typeof result === 'object') {
-                                                        if (result.error) {
-                                                            setActiveTab("terminal");
+                                    {!props.hideSubmit && (
+                                        <button
+                                            onClick={async () => {
+                                                if (view) {
+                                                    if (props.actions?.onSubmit) {
+                                                        const result = await props.actions.onSubmit(view.state.doc.toString());
+
+                                                        // If result is returned, use it to switch tabs
+                                                        if (result && typeof result === 'object') {
+                                                            if (result.error) {
+                                                                setActiveTab("terminal");
+                                                            } else {
+                                                                // Submit usually runs all test cases, so show test cases tab
+                                                                setActiveTab("testcases");
+                                                            }
                                                         } else {
-                                                            // Submit usually runs all test cases, so show test cases tab
+                                                            // Fallback
                                                             setActiveTab("testcases");
                                                         }
-                                                    } else {
-                                                        // Fallback
-                                                        setActiveTab("testcases");
+                                                        setIsTerminalOpen(true);
                                                     }
-                                                    setIsTerminalOpen(true);
                                                 }
-                                            }
-                                        }}
-                                        className={`px-10 py-3 bg-[var(--brand)] text-white font-black rounded-xl text-[12px] uppercase tracking-widest shadow-lg shadow-[var(--brand-light)] hover:bg-[var(--brand-dark)] hover:-translate-y-0.5 transition-all active:translate-y-0 active:scale-[0.98] flex items-center gap-2`}
-                                    >
-                                        Submit
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-                                    </button>
+                                            }}
+                                            className={`px-10 py-3 bg-[var(--brand)] text-white font-black rounded-xl text-[12px] uppercase tracking-widest shadow-lg shadow-[var(--brand-light)] hover:bg-[var(--brand-dark)] hover:-translate-y-0.5 transition-all active:translate-y-0 active:scale-[0.98] flex items-center gap-2`}
+                                        >
+                                            Submit
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                                        </button>
+                                    )}
                                 </>
                             )}
                         </div>

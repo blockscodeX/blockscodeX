@@ -42,6 +42,35 @@ export class MonitoringGateway
     @WebSocketServer()
     server: Server;
 
+    private extractToken(client: Socket): string | null {
+        // 1. Try auth handshake
+        if (client.handshake.auth && client.handshake.auth.token) {
+            return client.handshake.auth.token;
+        }
+
+        // 2. Try headers (Authorization: Bearer ...)
+        const authHeader = client.handshake.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            return authHeader.split(' ')[1];
+        }
+
+        // 3. Try cookies using robust regex or simple split
+        const cookieHeader = client.handshake.headers.cookie;
+        if (cookieHeader) {
+            try {
+                // Look for 'auth_token=' in the cookie string
+                const match = cookieHeader.match(/(?:^|;\s*)auth_token=([^;]*)/);
+                if (match && match[1]) {
+                    return match[1];
+                }
+            } catch (e) {
+                console.warn('[MonitoringGateway] Error parsing cookies', e);
+            }
+        }
+
+        console.log('[MonitoringGateway] No token found in handshake, headers, or cookies.');
+        return null;
+    }
     private activeConnections = new Map<string, { userId: string; examId: string }>(); // socketId -> Metadata
 
     afterInit(server: Server) {
@@ -50,18 +79,7 @@ export class MonitoringGateway
 
     async handleConnection(client: Socket) {
         try {
-            let cookieToken = null;
-            const cookieHeader = client.handshake.headers.cookie;
-            if (cookieHeader) {
-                const cookies = cookieHeader.split(';').reduce((acc: any, str: string) => {
-                    const [key, value] = str.split('=').map(s => s.trim());
-                    acc[key] = value;
-                    return acc;
-                }, {});
-                cookieToken = cookies['auth_token'];
-            }
-
-            const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1] || cookieToken;
+            const token = this.extractToken(client);
             if (!token) throw new Error('No token provided');
 
             const payload = this.jwtService.verify(token);
@@ -381,7 +399,12 @@ export class MonitoringGateway
         }, 1000); // 1 second delay
 
         // 3. Clear Redis
-        // await this.redis.del(`exam:${examId}:student:${userId}:online`);
+        try {
+            await this.redis.del(`exam:${examId}:student:${userId}:online`);
+        } catch (e) {
+            console.error('[Proctoring] Error clearing redis for terminated student:', e);
+        }
+
         this.activeConnections.forEach((meta, sid) => {
             if (meta.userId === userId) this.activeConnections.delete(sid);
         });

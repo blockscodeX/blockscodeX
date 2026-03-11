@@ -28,6 +28,7 @@ export interface Question {
             isPublic: boolean; // Replaces previous default "true"
             points: number
         }[];
+        showTestCases?: boolean;
     };
 
     // Web

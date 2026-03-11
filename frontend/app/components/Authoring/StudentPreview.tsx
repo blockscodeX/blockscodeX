@@ -64,7 +64,8 @@ export default function StudentPreview({ question, mode, setMode }: StudentPrevi
                     languageId: lang,
                     header: tmpl.head,
                     initialCode: tmpl.body,
-                    footer: tmpl.tail
+                    footer: tmpl.tail,
+                    testCases: question.codingConfig.testCases || []
                 }
             };
         }
@@ -110,6 +111,7 @@ export default function StudentPreview({ question, mode, setMode }: StudentPrevi
                     activeTab="question"
                     onNext={() => { }}
                     onPrevious={() => { }}
+                    hideSubmit={true}
                 />
             </div>
         </div>

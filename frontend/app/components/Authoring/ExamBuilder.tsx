@@ -93,7 +93,8 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                     javascript: { head: '', body: '// Write your code here', tail: '', solution: '' },
                     python: { head: '', body: '# Write your code here', tail: '', solution: '' }
                 },
-                testCases: []
+                testCases: [],
+                showTestCases: false
             } : undefined,
             webConfig: type === 'Web' ? {
                 html: '<h1>Hello World</h1>',

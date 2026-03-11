@@ -47,4 +47,5 @@ export interface CodeEditorProps {
     // Test cases provided by the question (optional)
     testCases?: Array<any>;
     terminalOutput?: string;
+    hideSubmit?: boolean;
 }

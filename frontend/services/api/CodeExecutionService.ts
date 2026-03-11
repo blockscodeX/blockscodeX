@@ -1,6 +1,6 @@
 // Use Proxy for Client-Side execution to ensure cookies are passed automatically
-const BASE_URL = typeof window !== 'undefined' 
-    ? '/api/proxy' 
+const BASE_URL = typeof window !== 'undefined'
+    ? '/api/proxy'
     : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api');
 
 export interface ExecutionResult {
@@ -28,7 +28,7 @@ export interface SubmissionResult {
 const authFetch = async (endpoint: string, options: RequestInit = {}) => {
     // endpoint should be relative like '/code/run'
     const url = `${BASE_URL}${endpoint}`;
-    
+
     // Explicitly strip Content-Type if body is FormData (file upload)
     // otherwise default to application/json
     const headers: Record<string, string> = {
@@ -48,7 +48,7 @@ const authFetch = async (endpoint: string, options: RequestInit = {}) => {
     if (!response.ok) {
         // Handle 401 specifically if needed, or throw generic error
         if (response.status === 401) {
-             throw new Error("Unauthorized: Please log in again.");
+            throw new Error("Unauthorized: Please log in again.");
         }
         const errorData = await response.text();
         throw new Error(`Execution error: ${response.status} ${errorData}`);
@@ -74,7 +74,7 @@ export const CodeExecutionService = {
         }
     },
 
-    submit: async (unitId: string, language: string, code: string, examId?: string): Promise<SubmissionResult> => {
+    submit: async (unitId: string, language: string, code: string, examId?: string, testCases?: any[]): Promise<SubmissionResult> => {
         try {
             return await authFetch('/code/submit', {
                 method: 'POST',
@@ -82,7 +82,8 @@ export const CodeExecutionService = {
                     unitId,
                     language,
                     code,
-                    examId
+                    examId,
+                    testCases
                 })
             });
         } catch (error) {

@@ -71,6 +71,7 @@ interface UnitRendererProps {
     hideAttemptBanner?: boolean;
     marksObtained?: number;
     questionTotalMarks?: number;
+    hideSubmit?: boolean;
 }
 
 import { CodeExecutionService } from '@/services/api/CodeExecutionService';
@@ -109,7 +110,8 @@ export function UnitRendererComponent({
     examId,
     hideAttemptBanner = false,
     marksObtained,
-    questionTotalMarks
+    questionTotalMarks,
+    hideSubmit = false
 }: UnitRendererProps) {
 
     const purifyConfig = { ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] };
@@ -384,6 +386,7 @@ export function UnitRendererComponent({
                         executionResults={executionResults}
                         setExecutionResults={setExecutionResults}
                         examId={examId}
+                        hideSubmit={hideSubmit}
                     />
                 );
             case 'Web':
@@ -553,6 +556,7 @@ function arePropsEqual(prevProps: UnitRendererProps, nextProps: UnitRendererProp
     if (prevProps.selectedAttemptId !== nextProps.selectedAttemptId) return false;
     if (prevProps.isExecuting !== nextProps.isExecuting) return false;
     if (prevProps.contentFontSize !== nextProps.contentFontSize) return false;
+    if (prevProps.hideSubmit !== nextProps.hideSubmit) return false;
 
     // Otherwise, assume it's the same. (We ignore function references like onNext, onSubmit, which might change on every render in parent)
     return true;

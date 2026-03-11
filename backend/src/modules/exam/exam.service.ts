@@ -487,7 +487,7 @@ export class ExamService {
 
             if (existing) {
                 if (existing.status === 'TERMINATED') {
-                    throw new ConflictException('Exam session has been terminated by the instructor. Contact your teacher.');
+                    throw new ConflictException('EXAM_TERMINATED');
                 }
                 // If metadata changed, we could update it. But typically it stays same for the session.
                 // We'll update it if provided to ensure the latest "Name/Roll No" from login is preserved.

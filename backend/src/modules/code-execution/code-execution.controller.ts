@@ -17,12 +17,13 @@ export class CodeExecutionController {
     }
 
     @Post('submit')
-    async submit(@Body() body: { unitId: string; language: string; code: string; examId?: string }) {
+    async submit(@Body() body: { unitId: string; language: string; code: string; examId?: string; testCases?: any[] }) {
         return this.codeExecutionService.submitCode(
             body.unitId,
             body.language,
             body.code,
-            body.examId
+            body.examId,
+            body.testCases
         );
     }
 }

@@ -136,7 +136,8 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
                     javascript: { head: '', body: '// Write your code here', tail: '', solution: '' },
                     python: { head: '', body: '# Write your code here', tail: '', solution: '' }
                 },
-                testCases: []
+                testCases: [],
+                showTestCases: true
             } : undefined,
             webConfig: type === 'Web' ? {
                 html: '<h1>Hello World</h1>',

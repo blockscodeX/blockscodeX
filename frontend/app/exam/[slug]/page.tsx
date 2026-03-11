@@ -558,6 +558,10 @@ export default function PublicExamPage() {
                     return;
                 }
 
+                if (error.message?.includes('EXAM_TERMINATED')) {
+                    window.location.href = `/exam/login?slug=${slug}&error=terminated`;
+                    return; // Keep loading visible
+                }
                 if (error.message?.includes('EXAM_ALREADY_ACTIVE')) {
                     window.location.href = `/exam/login?slug=${slug}&error=active_session`;
                     return; // Keep loading visible

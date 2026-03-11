@@ -91,7 +91,10 @@ export const ExamService = {
             });
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
-                if (res.status === 409 || (errorData.message && errorData.message.includes('ALREADY'))) {
+                if (res.status === 409) {
+                    if (errorData.message === 'EXAM_TERMINATED') {
+                        throw new Error('EXAM_TERMINATED');
+                    }
                     throw new Error('EXAM_ALREADY_ACTIVE');
                 }
                 if (errorData.message) {

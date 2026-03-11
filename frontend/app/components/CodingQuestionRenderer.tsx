@@ -4,8 +4,8 @@ import dynamic from 'next/dynamic';
 import { PLAYGROUND_LANGUAGES } from './Editor/playgroundLanguages';
 
 const CodeEditor = dynamic(() => import('./Editor/CodeEditor'), {
-  loading: () => <div className="h-[400px] bg-slate-50 animate-pulse rounded-2xl flex items-center justify-center text-slate-400 text-xs font-black uppercase tracking-widest">Loading Editor...</div>,
-  ssr: false
+    loading: () => <div className="h-[400px] bg-slate-50 animate-pulse rounded-2xl flex items-center justify-center text-slate-400 text-xs font-black uppercase tracking-widest">Loading Editor...</div>,
+    ssr: false
 });
 import { CodeExecutionService } from '@/services/api/CodeExecutionService';
 import { UnitQuestion } from '@/types/unit';
@@ -27,6 +27,7 @@ interface CodingQuestionRendererProps {
     executionResults: any[];
     setExecutionResults: (val: any[]) => void;
     examId?: string;
+    hideSubmit?: boolean;
 }
 
 export default function CodingQuestionRenderer({
@@ -45,7 +46,8 @@ export default function CodingQuestionRenderer({
     setTerminalLogs,
     executionResults,
     setExecutionResults,
-    examId
+    examId,
+    hideSubmit = false
 }: CodingQuestionRendererProps) {
 
     // Templates & allowed languages may come from the question (teacher config)
@@ -129,30 +131,38 @@ export default function CodingQuestionRenderer({
     };
 
     const rawTestCases = (question.codingConfig?.testCases || []);
-
-    // Merge execution results with raw test cases if available to preserve metadata (like points, though points aren't in result yet)
-    // Or just use execution results.
+    const showTestCases = question.codingConfig?.showTestCases ?? true;
 
     let displayedTestCases: any[] = [];
 
-    if (executionResults.length > 0) {
-        displayedTestCases = executionResults;
-    } else if (isRunning) {
-        // While executing? maybe show nothing or generic "Running"
+    if (hideSubmit) {
+        // Teacher Preview: Show all test cases raw
         displayedTestCases = rawTestCases.map((tc: any) => ({
             ...tc,
-            input: tc.isPublic ? tc.input : null,
-            expectedOutput: tc.isPublic ? (tc.output || tc.expectedOutput) : null,
-            isPublic: tc.isPublic !== false
+            expectedOutput: tc.output || tc.expectedOutput,
+            isPublic: true // Force public for preview so inputs/outputs are not masked
         }));
+    } else if (!showTestCases) {
+        // Global visibility OFF for students
+        displayedTestCases = [];
     } else {
-        // Default view
-        displayedTestCases = rawTestCases.map((tc: any) => ({
+        // Student view: Filter by isPublic or mask non-public
+        displayedTestCases = rawTestCases.filter((tc: any) => tc.isPublic).map((tc: any) => ({
             ...tc,
-            input: tc.isPublic ? tc.input : null,
-            expectedOutput: tc.isPublic ? (tc.output || tc.expectedOutput) : null,
-            isPublic: tc.isPublic !== false
+            expectedOutput: tc.output || tc.expectedOutput
         }));
+    }
+
+    // Overlay execution results if they exist (maintained in state after Run/Submit)
+    if (executionResults.length > 0) {
+        if (hideSubmit) {
+            displayedTestCases = executionResults;
+        } else if (!showTestCases) {
+            displayedTestCases = [];
+        } else {
+            // Only show results for public test cases for students
+            displayedTestCases = executionResults.filter((r: any) => r.isPublic);
+        }
     }
 
     // Custom toolbar content: language selector (restrict to allowedLangs when provided)
@@ -182,8 +192,15 @@ export default function CodingQuestionRenderer({
         setIsRunning(true);
         try {
             // If running a test case (not custom input), run ALL test cases via submit
+            // If running a test case (not custom input), run ALL test cases via submit
             if (testCaseIndex !== undefined) {
-                const result = await CodeExecutionService.submit(question.id, activeLangId, fullCode, examId);
+                const result = await CodeExecutionService.submit(
+                    question.id,
+                    activeLangId,
+                    fullCode,
+                    examId,
+                    question.codingConfig?.testCases // Pass test cases for preview
+                );
 
                 // Handle case where backend returns no results (e.g. mismatch in test cases)
                 if (!result.results || result.results.length === 0) {
@@ -266,7 +283,13 @@ export default function CodingQuestionRenderer({
         const fullCode = `${codingLanguage.header}\n${code}\n${codingLanguage.footer}`;
 
         try {
-            const result = await CodeExecutionService.submit(question.id, activeLangId, fullCode, examId);
+            const result = await CodeExecutionService.submit(
+                question.id,
+                activeLangId,
+                fullCode,
+                examId,
+                question.codingConfig?.testCases // Pass test cases for preview
+            );
             console.log('Submission Result:', result); // DEBUG
 
             let finalResults = result.results;
@@ -340,6 +363,7 @@ export default function CodingQuestionRenderer({
             customToolbarContent={languageSelector}
             terminalOutput={terminalLogs}
             options={{ readOnly: hasAttemptSelected }}
+            hideSubmit={hideSubmit}
         />
     );
 }

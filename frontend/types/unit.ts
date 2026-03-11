@@ -32,6 +32,7 @@ export interface UnitQuestion {
         }>;
         // Optional list of allowed languages (e.g. ['javascript','python'])
         allowedLanguages?: string[];
+        showTestCases?: boolean;
     };
     // Web specific
     webConfig?: {
