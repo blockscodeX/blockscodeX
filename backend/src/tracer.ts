@@ -17,4 +17,13 @@ tracer.init({
   port: 8126
 });
 
+// Filter out noisy BullMQ polling commands from Redis traces
+(tracer as any).addFilter((span: any) => {
+  const resource = span.resource?.toUpperCase() || '';
+  if (resource.includes('BZPOPMIN') || resource.includes('EVALSHA')) {
+    return false;
+  }
+  return true;
+});
+
 export default tracer;
