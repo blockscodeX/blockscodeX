@@ -298,24 +298,11 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
                         questions: Array.isArray(s.questions) ? s.questions : (s.id ? [s] : [])
                     }));
 
-                    // find the section that contains this question
-                    const qNorm = String(cq.id || '').replace(/^q-/i, '');
-                    for (const sec of sectionList) {
-                        const found = sec.questions.find((qq: any) => String(qq.id || '').replace(/^q-/i, '') === qNorm);
-                        if (found) {
-                            source = 'test-section';
-                            units = sec.questions.map((qq: any) => ({ id: String(qq.id), type: qq.type || qq.questionType || 'Test', title: qq.title || 'Question' }));
-                            break;
-                        }
-                    }
-
-                    // fallback to flattened all questions
-                    if (units.length === 0) {
-                        const flat = sectionList.flatMap((s: any) => s.questions || []);
-                        if (flat.length > 0) {
-                            source = 'test-flat-fallback';
-                            units = flat.map((qq: any) => ({ id: String(qq.id), type: qq.type || qq.questionType || 'Test', title: qq.title || 'Question' }));
-                        }
+                    // Show ALL questions from ALL sections (flattened) so the sidebar shows the full test
+                    const flat = sectionList.flatMap((s: any) => s.questions || []);
+                    if (flat.length > 0) {
+                        source = 'test-all-sections';
+                        units = flat.map((qq: any) => ({ id: String(qq.id), type: qq.type || qq.questionType || 'Test', title: qq.title || 'Question' }));
                     }
                 }
             }
@@ -532,8 +519,8 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
                             sidebar={
                                 <UnitSidebar
                                     units={sidebarUnits}
-                                    moduleTitle={(currentQuestion as any)?.moduleTitle || 'Course Content'}
-                                    sectionTitle="Current Unit"
+                                    moduleTitle={(currentQuestion as any)?.moduleTitle || (currentQuestion as any)?.module?.title || 'Course Content'}
+                                    sectionTitle={`${sidebarUnits.length} Question${sidebarUnits.length !== 1 ? 's' : ''}`}
                                     onToggle={() => setShowSidebar(false)}
                                     onUnitClick={(unitId: string) => navigateToUnit(unitId)}
                                     onPrevSection={handlePreviousSection}

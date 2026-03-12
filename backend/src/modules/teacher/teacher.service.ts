@@ -203,7 +203,10 @@ export class TeacherService {
                     where: courseFilter,
                     select: {
                         id: true, title: true,
-                        modules: { select: { units: { select: { id: true } } } }
+                        modules: { select: { units: { select: { id: true } } } },
+                        tests: {
+                            select: { id: true, title: true, slug: true, questions: true }
+                        }
                     }
                 },
                 unitSubmissions: {
@@ -215,8 +218,49 @@ export class TeacherService {
             take: 50
         });
 
+        // Collect all question IDs across all tests for a batch QuestionAttempt query
+        const allStudentIds = students.map((s: any) => s.id);
+        const questionAttempts = await this.prisma.questionAttempt.findMany({
+            where: { userId: { in: allStudentIds }, type: 'UNIT' },
+            select: { userId: true, itemId: true, isCorrect: true, score: true, createdAt: true }
+        });
+
+        // Build a lookup: userId → Map<itemId, { isCorrect, score }>
+        const attemptsByUserAndItem: Map<string, Map<string, { isCorrect: boolean; score: number | null }>> = new Map();
+        for (const a of questionAttempts) {
+            if (!attemptsByUserAndItem.has(a.userId)) {
+                attemptsByUserAndItem.set(a.userId, new Map());
+            }
+            // Keep the best scored (or latest) attempt per question
+            const userMap = attemptsByUserAndItem.get(a.userId)!;
+            const existing = userMap.get(a.itemId);
+            if (!existing || (a.score ?? 0) > (existing.score ?? 0)) {
+                userMap.set(a.itemId, { isCorrect: a.isCorrect, score: a.score });
+            }
+        }
+
+        const extractQuestionIds = (questions: any): string[] => {
+            if (!questions) return [];
+            let data = questions;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch { return []; }
+            }
+            if (Array.isArray(data)) {
+                if (data.length > 0 && data[0].questions) {
+                    // sections format
+                    return data.flatMap((s: any) => (s.questions || []).map((q: any) => String(q.id)));
+                }
+                return data.map((q: any) => String(q.id));
+            }
+            if (data?.sections) {
+                return data.sections.flatMap((s: any) => (s.questions || []).map((q: any) => String(q.id)));
+            }
+            return [];
+        };
+
         return students.map((s: any) => {
             const completedUnitIds = new Set(s.unitSubmissions.map((sub: any) => sub.unitId));
+            const userAttemptMap = attemptsByUserAndItem.get(s.id);
 
             const detailedCourses = s.courses.map((course: any) => {
                 const allCourseUnitIds = course.modules.flatMap((m: any) => m.units.map((u: any) => u.id));
@@ -228,12 +272,41 @@ export class TeacherService {
                 }
                 const progress = totalUnits > 0 ? Math.round((completedCount / totalUnits) * 100) : 0;
 
+                // Compute per-test scores
+                const tests = (course.tests || []).map((test: any) => {
+                    const questionIds = extractQuestionIds(test.questions);
+                    const totalQuestions = questionIds.length;
+                    let answeredCount = 0;
+                    let correctCount = 0;
+
+                    for (const qid of questionIds) {
+                        const attempt = userAttemptMap?.get(qid);
+                        if (attempt) {
+                            answeredCount++;
+                            if (attempt.isCorrect) correctCount++;
+                        }
+                    }
+
+                    const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : null;
+                    return {
+                        id: test.id,
+                        slug: test.slug,
+                        title: test.title,
+                        totalQuestions,
+                        answeredQuestions: answeredCount,
+                        correctAnswers: correctCount,
+                        score,
+                        attempted: answeredCount > 0
+                    };
+                });
+
                 return {
                     id: course.id,
                     title: course.title,
                     progress,
                     totalUnits,
-                    completedUnits: completedCount
+                    completedUnits: completedCount,
+                    tests
                 };
             });
 

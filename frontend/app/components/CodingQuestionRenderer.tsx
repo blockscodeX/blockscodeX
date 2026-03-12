@@ -140,28 +140,38 @@ export default function CodingQuestionRenderer({
         displayedTestCases = rawTestCases.map((tc: any) => ({
             ...tc,
             expectedOutput: tc.output || tc.expectedOutput,
-            isPublic: true // Force public for preview so inputs/outputs are not masked
+            isPublic: true
         }));
-    } else if (!showTestCases) {
-        // Global visibility OFF for students
-        displayedTestCases = [];
     } else {
-        // Student view: Filter by isPublic or mask non-public
-        displayedTestCases = rawTestCases.filter((tc: any) => tc.isPublic).map((tc: any) => ({
-            ...tc,
-            expectedOutput: tc.output || tc.expectedOutput
-        }));
+        // Student view: Show ALL cases but mask non-public or if showTestCases is off
+        displayedTestCases = rawTestCases.map((tc: any) => {
+            const isActuallyPublic = showTestCases && tc.isPublic;
+            return {
+                ...tc,
+                input: isActuallyPublic ? tc.input : null,
+                expectedOutput: isActuallyPublic ? (tc.output || tc.expectedOutput) : null,
+                isPublic: isActuallyPublic
+            };
+        });
     }
 
-    // Overlay execution results if they exist (maintained in state after Run/Submit)
+    // Overlay execution results if they exist
     if (executionResults.length > 0) {
         if (hideSubmit) {
             displayedTestCases = executionResults;
-        } else if (!showTestCases) {
-            displayedTestCases = [];
         } else {
-            // Only show results for public test cases for students
-            displayedTestCases = executionResults.filter((r: any) => r.isPublic);
+            // Map results to display list, ensuring masking is preserved for non-public ones
+            displayedTestCases = executionResults.map((res: any, idx: number) => {
+                const isActuallyPublic = showTestCases && res.isPublic;
+                return {
+                    ...res,
+                    input: isActuallyPublic ? res.input : null,
+                    expectedOutput: isActuallyPublic ? (res.output || res.expectedOutput) : null,
+                    actualOutput: isActuallyPublic ? res.actualOutput : "[Hidden]",
+                    error: isActuallyPublic ? res.error : (res.error ? "Error occurred in hidden case" : null),
+                    isPublic: isActuallyPublic
+                };
+            });
         }
     }
 

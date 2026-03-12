@@ -6,7 +6,7 @@ import { TeacherService } from "@/services/api/TeacherService";
 import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { useToast } from "@/app/components/Common/Toast";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Users, GraduationCap, X, Search, Filter, Mail, Calendar, CheckCircle2, Trash2 } from "lucide-react";
+import { Users, GraduationCap, X, Search, Filter, Mail, Calendar, CheckCircle2, Trash2, ClipboardList } from "lucide-react";
 
 export default function TeacherStudentsPage() {
     const { error: toastError } = useToast();
@@ -239,6 +239,28 @@ export default function TeacherStudentsPage() {
                                                         />
                                                     </div>
                                                 </div>
+                                                {/* Test Marks */}
+                                                {course.tests && course.tests.length > 0 && (
+                                                    <div className="mt-4 pt-4 border-t border-slate-50">
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                                            <ClipboardList size={10} /> Test Scores
+                                                        </p>
+                                                        <div className="space-y-1.5">
+                                                            {course.tests.map((test: any) => (
+                                                                <div key={test.id} className="flex items-center justify-between">
+                                                                    <span className="text-[11px] font-bold text-slate-500 truncate max-w-[60%]">{test.title}</span>
+                                                                    {test.attempted ? (
+                                                                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg ${test.score >= 70 ? 'bg-emerald-50 text-emerald-600' : test.score >= 40 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-500'}`}>
+                                                                            {test.correctAnswers}/{test.totalQuestions} &nbsp;({test.score}%)
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[11px] font-bold text-slate-300 px-2 py-0.5 rounded-lg bg-slate-50">Not attempted</span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))
                                     ) : (

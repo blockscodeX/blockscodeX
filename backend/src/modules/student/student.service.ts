@@ -582,26 +582,80 @@ export class StudentService {
     }
 
     async getUnitSubmissions(userId: string, unitId: string) {
-        return this.prisma.unitSubmission.findMany({
-            where: { userId, unitId },
+        // Check if this is a real Unit or a virtual test question
+        const unitExists = await this.prisma.unit.findUnique({ where: { id: unitId }, select: { id: true } });
+        if (unitExists) {
+            return this.prisma.unitSubmission.findMany({
+                where: { userId, unitId },
+                orderBy: { createdAt: 'desc' }
+            });
+        }
+
+        // Virtual test question: return from QuestionAttempt instead
+        const attempts = await this.prisma.questionAttempt.findMany({
+            where: { userId, itemId: unitId, type: 'UNIT' },
             orderBy: { createdAt: 'desc' }
         });
+        // Shape to match UnitSubmission structure that frontend expects
+        return attempts.map((a: any) => ({
+            id: a.id,
+            userId: a.userId,
+            unitId,
+            status: a.isCorrect ? 'COMPLETED' : 'IN_PROGRESS',
+            content: a.content,
+            score: a.score,
+            createdAt: a.createdAt,
+            updatedAt: a.createdAt
+        }));
     }
 
     async submitUnit(userId: string, unitId: string, data: { status: string; content: any; score?: number }) {
-        const submission = await this.prisma.unitSubmission.create({
-            data: {
-                userId,
-                unitId,
-                status: data.status,
-                content: data.content,
-                score: data.score
-            }
-        });
+        // Check if this unitId maps to a real Unit record (FK constraint)
+        const unitExists = await this.prisma.unit.findUnique({ where: { id: unitId }, select: { id: true } });
 
-        // Trigger analytics updates
+        let submission: any;
+
+        if (unitExists) {
+            // Normal unit — store in UnitSubmission
+            submission = await this.prisma.unitSubmission.create({
+                data: {
+                    userId,
+                    unitId,
+                    status: data.status,
+                    content: data.content,
+                    score: data.score
+                }
+            });
+
+            // Trigger course-progress analytics only for real units
+            await this.studentAnalyticsQueue.add('update-course-progress', { userId, unitId });
+        } else {
+            // Virtual test question — store in QuestionAttempt (no FK to Unit)
+            const attempt = await this.prisma.questionAttempt.create({
+                data: {
+                    userId,
+                    itemId: unitId,
+                    type: 'UNIT',
+                    content: data.content,
+                    isCorrect: data.status === 'COMPLETED',
+                    score: data.score
+                }
+            });
+            // Shape to UnitSubmission-compatible response
+            submission = {
+                id: attempt.id,
+                userId: attempt.userId,
+                unitId,
+                status: attempt.isCorrect ? 'COMPLETED' : 'IN_PROGRESS',
+                content: attempt.content,
+                score: attempt.score,
+                createdAt: attempt.createdAt,
+                updatedAt: attempt.createdAt
+            };
+        }
+
+        // Trigger analytics updates (common to both paths)
         await this.studentAnalyticsQueue.add('update-streak', { userId });
-        await this.studentAnalyticsQueue.add('update-course-progress', { userId, unitId });
         await this.studentAnalyticsQueue.add('save-question-attempt', {
             userId,
             itemId: unitId,

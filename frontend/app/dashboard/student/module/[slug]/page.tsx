@@ -62,6 +62,28 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
     );
   };
 
+  const flattenTestQuestions = (test: any) => {
+    if (!test) return [];
+    let questionsData: any = test.questions;
+    if (typeof questionsData === 'string') {
+      try {
+        questionsData = JSON.parse(questionsData);
+      } catch (e) {
+        console.error('Failed to parse test questions:', e);
+        questionsData = [];
+      }
+    }
+
+    // If it's a flat array of questions
+    if (Array.isArray(questionsData) && (questionsData.length === 0 || !questionsData[0].questions)) {
+      return questionsData;
+    }
+
+    // If it's sections
+    const sections = Array.isArray(questionsData) ? questionsData : (questionsData?.sections || []);
+    return sections.flatMap((s: any) => Array.isArray(s.questions) ? s.questions : (s.id ? [s] : []));
+  };
+
   // Flatten lessons (units) and test questions for performance view based on selected module and course tests
   const selectedModule = course?.modules?.[activeModuleIndex] || null;
 
@@ -173,7 +195,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
         attempts: unitAttempts
       };
     }),
-    ...(course?.tests?.flatMap((t: any) => (t.questions || []).map((q: any, qi: number) => ({
+    ...(course?.tests?.flatMap((t: any) => flattenTestQuestions(t).map((q: any, qi: number) => ({
       id: `T-${t.id}-${q.id}`,
       // Display question index within the test
       displayId: qi + 1,
@@ -477,7 +499,7 @@ export default function ModulePage({ params: paramsPromise }: { params: Promise<
                   <div className="space-y-3">
                     <h2 className="text-lg font-black text-slate-800 tracking-tight ml-2 mb-4">Unit Curriculum</h2>
 
-                    {activeTest.questions.map((q: any, qi: number) => (
+                    {flattenTestQuestions(activeTest).map((q: any, qi: number) => (
                       <div key={q.id} className="group">
                         <div
                           className={`px-8 py-5 rounded-[24px] border transition-all cursor-pointer flex items-center justify-between bg-white border-slate-100/80 hover:border-slate-300/50`}

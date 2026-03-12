@@ -267,11 +267,6 @@ export default function CodeEditor(props: CodeEditorProps) {
                                                 }`}
                                         >
                                             <span>Case {idx + 1}</span>
-                                            {(tc.points || tc.marks) && (
-                                                <span className={`text-[9px] ${selectedTestCase === idx ? 'text-white/80' : 'text-slate-400'}`}>
-                                                    {tc.points || tc.marks} pts
-                                                </span>
-                                            )}
                                         </button>
                                     ))}
                                     {(!props.testCases || props.testCases.length === 0) && (
@@ -298,11 +293,6 @@ export default function CodeEditor(props: CodeEditorProps) {
                                                 </div>
                                                 <div className="text-center">
                                                     <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Hidden Test Case</h3>
-                                                    {(props.testCases[selectedTestCase].points || props.testCases[selectedTestCase].marks) && (
-                                                        <div className="mt-2 inline-block px-2 py-1 bg-slate-100 rounded text-[10px] font-bold text-slate-600">
-                                                            {props.testCases[selectedTestCase].points || props.testCases[selectedTestCase].marks} Points
-                                                        </div>
-                                                    )}
                                                     <p className="text-xs text-slate-500 mt-1">Input and output are hidden for this case.</p>
                                                 </div>
                                                 {props.testCases[selectedTestCase].passed !== undefined && (
@@ -313,13 +303,6 @@ export default function CodeEditor(props: CodeEditorProps) {
                                             </div>
                                         ) : (
                                             <>
-                                                {(props.testCases[selectedTestCase].points || props.testCases[selectedTestCase].marks) && (
-                                                    <div className="flex justify-end mb-2">
-                                                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                                                            {props.testCases[selectedTestCase].points || props.testCases[selectedTestCase].marks} Points
-                                                        </span>
-                                                    </div>
-                                                )}
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="flex flex-col gap-2">
                                                         <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Input</span>

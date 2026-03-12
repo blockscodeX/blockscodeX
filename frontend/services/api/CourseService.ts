@@ -54,7 +54,8 @@ export const CourseService = {
             const data = await res.json();
             console.log('[CourseService] unit payload:', data);
             // Transform backend Unit to Frontend UnitQuestion with defensive defaults
-            const content = data.content || {};
+            // Test questions returned by backend might not have 'content' property because they ARE the question object.
+            const content = data.content || (data.type ? data : {});
             // Backend uses `problemStatement` and `options` for authored questions
             const description = content.problemStatement || content.description || '';
             const mcqOptions = Array.isArray(content.options) ? content.options.map((o: any) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })) : (Array.isArray(content.mcqOptions) ? content.mcqOptions.map((o: any) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })) : []);
@@ -199,7 +200,10 @@ export const CourseService = {
                 // Preserve module object so pages can access module.id / module.course
                 module: data.module || undefined,
                 // Include module units for sidebar (if backend provided)
-                moduleUnits: (data.moduleUnits && Array.isArray(data.moduleUnits)) ? data.moduleUnits : ((data.module && Array.isArray(data.module.units)) ? data.module.units : []),
+                // For test questions, we also look into data.module.questions
+                moduleUnits: (data.moduleUnits && Array.isArray(data.moduleUnits)) ? data.moduleUnits :
+                    ((data.module && Array.isArray(data.module.units)) ? data.module.units :
+                        ((data.module && Array.isArray(data.module.questions)) ? data.module.questions : [])),
                 moduleTitle: (data.moduleTitle || data.module?.title || data.module?.course?.title) || undefined
             };
 
