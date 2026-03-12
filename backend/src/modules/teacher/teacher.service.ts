@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../services/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
 import { MonitoringGateway } from '../monitoring/monitoring.gateway';
+import { NotificationGateway } from '../notification/notification.gateway';
+import { StorageService } from '../../services/storage/storage.service';
 import { ExamService } from '../exam/exam.service';
 import { CourseService } from '../course/course.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
@@ -13,6 +15,8 @@ export class TeacherService {
     constructor(
         private prisma: PrismaService,
         private monitoringGateway: MonitoringGateway,
+        private notificationGateway: NotificationGateway,
+        private storageService: StorageService,
         private examService: ExamService,
         private courseService: CourseService,
         @InjectRedis() private readonly redis: Redis
@@ -1538,6 +1542,281 @@ export class TeacherService {
             where: { id: examId },
             data: { resultsPublished: true }
         });
+    }
+
+    // ─── GROUPS ────────────────────────────────────────────────────────────────
+
+    async getGroups(user: any) {
+        return this.prisma.studentGroup.findMany({
+            where: { teacherId: user.id },
+            include: {
+                students: { select: { id: true, name: true, email: true, rollNumber: true } },
+                _count: { select: { students: true, announcements: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+    }
+
+    async getGroup(groupId: string, user: any) {
+        const group = await this.prisma.studentGroup.findUnique({
+            where: { id: groupId },
+            include: {
+                students: { select: { id: true, name: true, email: true, rollNumber: true } },
+                _count: { select: { students: true, announcements: true } }
+            }
+        });
+        if (!group) throw new NotFoundException('Group not found');
+        if (group.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+        return group;
+    }
+
+    async createGroup(user: any, data: { name: string; emails?: string[] }) {
+        if (!data.name || !data.name.trim()) throw new BadRequestException('Group name is required');
+
+        const group = await this.prisma.studentGroup.create({
+            data: {
+                name: data.name.trim(),
+                teacherId: user.id,
+                orgId: user.orgId || null
+            }
+        });
+
+        // If emails provided, add students in bulk
+        if (data.emails && data.emails.length > 0) {
+            const result = await this.addGroupStudents(group.id, data.emails, user);
+            return { ...group, enrollResult: result };
+        }
+
+        return group;
+    }
+
+    async updateGroup(groupId: string, user: any, data: { name: string }) {
+        const group = await this.prisma.studentGroup.findUnique({ where: { id: groupId } });
+        if (!group) throw new NotFoundException('Group not found');
+        if (group.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+
+        return this.prisma.studentGroup.update({
+            where: { id: groupId },
+            data: { name: data.name.trim() }
+        });
+    }
+
+    async deleteGroup(groupId: string, user: any) {
+        const group = await this.prisma.studentGroup.findUnique({ where: { id: groupId } });
+        if (!group) throw new NotFoundException('Group not found');
+        if (group.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+
+        return this.prisma.studentGroup.delete({ where: { id: groupId } });
+    }
+
+    async addGroupStudents(groupId: string, emails: string[], user: any) {
+        const group = await this.prisma.studentGroup.findUnique({ where: { id: groupId } });
+        if (!group) throw new NotFoundException('Group not found');
+        if (group.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+
+        const results = [];
+        let addedCount = 0;
+        let failedCount = 0;
+
+        for (const email of emails) {
+            try {
+                const student = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+                if (!student) {
+                    results.push({ email, success: false, error: 'User not found' });
+                    failedCount++;
+                    continue;
+                }
+                if (student.role !== 'STUDENT') {
+                    results.push({ email, success: false, error: 'User is not a student' });
+                    failedCount++;
+                    continue;
+                }
+
+                // Check if already in group
+                const existing = await this.prisma.studentGroup.findFirst({
+                    where: { id: groupId, students: { some: { id: student.id } } }
+                });
+                if (existing) {
+                    results.push({ email, success: false, error: 'Already in group' });
+                    failedCount++;
+                    continue;
+                }
+
+                await this.prisma.studentGroup.update({
+                    where: { id: groupId },
+                    data: { students: { connect: { id: student.id } } }
+                });
+
+                results.push({ email, success: true, user: { id: student.id, name: student.name } });
+                addedCount++;
+            } catch (error: any) {
+                results.push({ email, success: false, error: error.message });
+                failedCount++;
+            }
+        }
+
+        return {
+            summary: { totalProcessed: emails.length, added: addedCount, failed: failedCount },
+            details: results
+        };
+    }
+
+    async removeGroupStudent(groupId: string, studentId: string, user: any) {
+        const group = await this.prisma.studentGroup.findUnique({ where: { id: groupId } });
+        if (!group) throw new NotFoundException('Group not found');
+        if (group.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+
+        return this.prisma.studentGroup.update({
+            where: { id: groupId },
+            data: { students: { disconnect: { id: studentId } } }
+        });
+    }
+
+    async enrollGroupInCourse(courseId: string, groupId: string, user: any) {
+        const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+        if (!course) throw new NotFoundException('Course not found');
+        this.checkAccess(course, user);
+
+        const group = await this.prisma.studentGroup.findUnique({
+            where: { id: groupId },
+            include: { students: { select: { id: true, email: true, name: true } } }
+        });
+        if (!group) throw new NotFoundException('Group not found');
+        if (group.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+
+        let enrolledCount = 0;
+        let alreadyEnrolled = 0;
+
+        for (const student of group.students) {
+            const isEnrolled = await this.prisma.course.findFirst({
+                where: { id: courseId, students: { some: { id: student.id } } }
+            });
+            if (isEnrolled) {
+                alreadyEnrolled++;
+                continue;
+            }
+
+            await this.prisma.course.update({
+                where: { id: courseId },
+                data: { students: { connect: { id: student.id } } }
+            });
+            enrolledCount++;
+        }
+
+        return {
+            groupName: group.name,
+            totalStudents: group.students.length,
+            enrolled: enrolledCount,
+            alreadyEnrolled
+        };
+    }
+
+    // ─── ANNOUNCEMENTS ─────────────────────────────────────────────────────────
+
+    async getAnnouncements(user: any) {
+        return this.prisma.announcement.findMany({
+            where: { teacherId: user.id },
+            include: {
+                groups: { select: { id: true, name: true } },
+                _count: { select: { reads: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+    }
+
+    async createAnnouncement(user: any, data: {
+        title: string;
+        content: string;
+        groupIds: string[];
+        attachments?: { name: string; url: string; type: string; size: number }[];
+    }) {
+        if (!data.title?.trim()) throw new BadRequestException('Title is required');
+        if (!data.content?.trim()) throw new BadRequestException('Content is required');
+        if (!data.groupIds || data.groupIds.length === 0) throw new BadRequestException('At least one group must be selected');
+
+        // Verify all groups belong to this teacher
+        const groups = await this.prisma.studentGroup.findMany({
+            where: { id: { in: data.groupIds }, teacherId: user.id },
+            include: { students: { select: { id: true } } }
+        });
+        if (groups.length !== data.groupIds.length) {
+            throw new ForbiddenException('One or more groups not found or not owned by you');
+        }
+
+        const announcement = await this.prisma.announcement.create({
+            data: {
+                title: data.title.trim(),
+                content: data.content,
+                attachments: data.attachments || [],
+                teacherId: user.id,
+                orgId: user.orgId || null,
+                groups: { connect: data.groupIds.map(id => ({ id })) }
+            },
+            include: {
+                groups: { select: { id: true, name: true } },
+                teacher: { select: { name: true } }
+            }
+        });
+
+        // Collect unique student IDs from all target groups
+        const studentIdSet = new Set<string>();
+        for (const group of groups) {
+            for (const student of group.students) {
+                studentIdSet.add(student.id);
+            }
+        }
+
+        // Broadcast via WebSocket
+        await this.notificationGateway.broadcastAnnouncement({
+            id: announcement.id,
+            title: announcement.title,
+            content: announcement.content,
+            attachments: announcement.attachments,
+            teacherName: announcement.teacher.name || 'Teacher',
+            groupNames: announcement.groups.map(g => g.name),
+            createdAt: announcement.createdAt
+        }, Array.from(studentIdSet));
+
+        return announcement;
+    }
+
+    async deleteAnnouncement(announcementId: string, user: any) {
+        const announcement = await this.prisma.announcement.findUnique({
+            where: { id: announcementId },
+            include: { groups: true }
+        });
+        if (!announcement) throw new NotFoundException('Announcement not found');
+        if (announcement.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+
+        // Delete attachment files from S3
+        const attachments = announcement.attachments as any[];
+        if (Array.isArray(attachments)) {
+            for (const att of attachments) {
+                if (att.url) {
+                    await this.storageService.deleteFile(att.url);
+                }
+            }
+        }
+
+        return this.prisma.announcement.delete({ where: { id: announcementId } });
+    }
+
+    async uploadAnnouncementFile(fileData: any, filename: string, mimetype: string, contentLength?: number) {
+        return this.storageService.uploadFile(fileData, filename, mimetype, 'announcements', contentLength);
     }
 
 }

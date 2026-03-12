@@ -234,5 +234,53 @@ export const StudentService = {
             console.error('[StudentService] Error', error);
             throw error;
         }
+    },
+
+    // ─── ANNOUNCEMENTS ─────────────────────────────────────────────────────────
+
+    async getAnnouncements(forceRefresh = false) {
+        const cacheKey = 'student_announcements';
+        if (!forceRefresh && cache.has(cacheKey)) {
+            return cache.get(cacheKey) as any[];
+        }
+
+        try {
+            const res = await authFetch('/student/announcements');
+            if (!res.ok) throw new Error('Failed to fetch announcements');
+            const data = await res.json();
+            cache.set(cacheKey, data);
+            return data;
+        } catch (error) {
+            console.error('[StudentService] Error', error);
+            throw error;
+        }
+    },
+
+    async getUnreadAnnouncementCount() {
+        try {
+            const res = await authFetch('/student/announcements/unread-count');
+            if (!res.ok) throw new Error('Failed to fetch unread count');
+            return await res.json();
+        } catch (error) {
+            console.error('[StudentService] Error', error);
+            return { count: 0 };
+        }
+    },
+
+    async markAnnouncementRead(id: string) {
+        try {
+            // Invalidate cache so next fetch is fresh
+            cache.delete('student_announcements');
+
+            const res = await authFetch(`/student/announcements/${id}/read`, {
+                method: 'POST',
+                body: JSON.stringify({})
+            });
+            if (!res.ok) throw new Error('Failed to mark announcement as read');
+            return await res.json();
+        } catch (error) {
+            console.error('[StudentService] Error', error);
+            throw error;
+        }
     }
 };

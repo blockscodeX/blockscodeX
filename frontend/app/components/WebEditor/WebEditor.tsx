@@ -26,6 +26,8 @@ interface WebEditorProps {
     // Optional test cases provided by backend
     testCases?: Array<any>;
     onSubmit?: (data: { html: string; css: string; js: string }) => void;
+    isExamMode?: boolean;
+    onCheatDetected?: (reason: string) => void;
 }
 
 export default function WebEditor({
@@ -39,7 +41,9 @@ export default function WebEditor({
     readOnly = false,
     fontSize,
     testCases,
-    onSubmit
+    onSubmit,
+    isExamMode = false,
+    onCheatDetected
 }: WebEditorProps) {
     const memoizedInitialFiles = React.useMemo(() => ({
         "index.html": initialHTML,
@@ -94,11 +98,19 @@ export default function WebEditor({
 
     const { editorRef, view } = useEditor({
         language: getLangConfig(activeFile),
-        actions: !readOnly ? {
-            onChange: (content) => updateFile(activeFile, content)
-        } : {},
+        actions: {
+            ...(!readOnly ? { onChange: (content) => updateFile(activeFile, content) } : {}),
+            ...(isExamMode && onCheatDetected ? { onCheatDetected } : {})
+        },
         options: {
-            readOnly: readOnly
+            readOnly: readOnly,
+            ...(isExamMode ? {
+                disablePaste: true,
+                disableCopy: true,
+                disableCut: true,
+                disableRightClick: true,
+                disableDragDrop: true
+            } : {})
         }
     });
 

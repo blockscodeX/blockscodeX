@@ -20,6 +20,8 @@ export interface SecurityOptions {
     disableMultiCursor?: boolean;
     disableDragDrop?: boolean;
     readOnly?: boolean;
+    /** When true, allows copy/paste within the editor using an internal clipboard, while blocking external clipboard */
+    allowInternalCopyPaste?: boolean;
 }
 
 export interface EditorActions {

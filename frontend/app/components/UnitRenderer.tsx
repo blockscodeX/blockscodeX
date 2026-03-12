@@ -72,6 +72,7 @@ interface UnitRendererProps {
     marksObtained?: number;
     questionTotalMarks?: number;
     hideSubmit?: boolean;
+    onCheatDetected?: (reason: string) => void;
 }
 
 import { CodeExecutionService } from '@/services/api/CodeExecutionService';
@@ -111,7 +112,8 @@ export function UnitRendererComponent({
     hideAttemptBanner = false,
     marksObtained,
     questionTotalMarks,
-    hideSubmit = false
+    hideSubmit = false,
+    onCheatDetected
 }: UnitRendererProps) {
 
     const purifyConfig = { ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] };
@@ -387,6 +389,8 @@ export function UnitRendererComponent({
                         setExecutionResults={setExecutionResults}
                         examId={examId}
                         hideSubmit={hideSubmit}
+                        isExamMode={isExamMode}
+                        onCheatDetected={onCheatDetected}
                     />
                 );
             case 'Web':
@@ -403,6 +407,8 @@ export function UnitRendererComponent({
                         onChange={onAnswerChange}
                         onSubmit={onSubmit}
                         readOnly={hasAttemptSelected}
+                        isExamMode={isExamMode}
+                        onCheatDetected={onCheatDetected}
                     />
                 );
             case 'Notebook':

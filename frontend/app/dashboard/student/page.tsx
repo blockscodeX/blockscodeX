@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/app/components/Navbar";
 import { StudentService, StudentModule, StudentStats } from "@/services/api/StudentService";
@@ -7,13 +7,60 @@ import { requireAuthClient } from "@/hooks/requireAuthClient";
 import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { useQuery } from "@/hooks/useQuery";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useNotificationSocket } from "@/hooks/useNotificationSocket";
+import { useToast } from "@/app/components/Common/Toast";
+import { Megaphone, X, FileText, ImageIcon, File, Download } from "lucide-react";
 
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const { success: toastSuccess } = useToast();
+
+  // Announcements state
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<any>(null);
 
   // Auth Check
   useEffect(() => { requireAuthClient("/login"); }, []);
+
+  // Load announcements
+  const loadAnnouncements = useCallback(async () => {
+    try {
+      const [annData, countData] = await Promise.all([
+        StudentService.getAnnouncements(),
+        StudentService.getUnreadAnnouncementCount()
+      ]);
+      setAnnouncements(annData);
+      setUnreadCount(countData.count || 0);
+    } catch (err) {
+      console.error("Failed to load announcements", err);
+    }
+  }, []);
+
+  useEffect(() => { loadAnnouncements(); }, [loadAnnouncements]);
+
+  // Real-time notifications
+  useNotificationSocket((announcement) => {
+    toastSuccess(`New announcement: ${announcement.title}`);
+    loadAnnouncements();
+  });
+
+  const handleOpenAnnouncement = async (ann: any) => {
+    setSelectedAnnouncement(ann);
+    if (!ann.isRead) {
+      try {
+        await StudentService.markAnnouncementRead(ann.id);
+        setUnreadCount(prev => Math.max(prev - 1, 0));
+        setAnnouncements(prev => prev.map(a => a.id === ann.id ? { ...a, isRead: true } : a));
+      } catch (err) { /* silent */ }
+    }
+  };
+
+  const handleDownload = (url: string, name: string) => {
+    const proxyUrl = `/api/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name || 'download')}`;
+    window.open(proxyUrl, '_self');
+  };
 
   // Optimized Data Fetching with Cache
   const { data: dashboardData, isLoading: loading } = useQuery('student-dashboard', async () => {
@@ -114,6 +161,57 @@ export default function DashboardPage() {
               <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full"></div>
             </div>
 
+            {/* ANNOUNCEMENTS CARD */}
+            <div className="bg-white rounded-[32px] border border-slate-100 p-8 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--brand-light)] text-[var(--brand)] flex items-center justify-center">
+                    <Megaphone size={20} />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-800 tracking-tight">Announcements</h3>
+                </div>
+              </div>
+
+              {announcements.length === 0 ? (
+                <p className="text-xs font-bold text-slate-400 text-center py-4">No announcements yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {announcements.slice(0, 2).map(ann => (
+                    <button
+                      key={ann.id}
+                      onClick={() => handleOpenAnnouncement(ann)}
+                      className={`w-full text-left p-4 rounded-2xl border transition-all hover:border-[var(--brand-light)] hover:shadow-sm active:scale-[0.98] ${
+                        ann.isRead ? 'bg-white border-slate-100' : 'bg-[var(--brand-light)]/30 border-[var(--brand-light)]'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                          ann.isRead ? 'bg-slate-100 text-slate-400' : 'bg-[var(--brand)] text-white shadow-sm'
+                        }`}>
+                          <Megaphone size={14} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-black truncate ${ann.isRead ? 'text-slate-600' : 'text-slate-800'}`}>{ann.title}</p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                            {new Date(ann.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            {ann.teacher?.name && ` • ${ann.teacher.name}`}
+                          </p>
+                        </div>
+                        {!ann.isRead && (
+                          <div className="w-2 h-2 rounded-full bg-[var(--brand)] flex-shrink-0 mt-1.5" />
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  {announcements.length > 2 && (
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center pt-2">
+                      +{announcements.length - 2} more
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="bg-white rounded-[32px] border border-slate-100 p-8 shadow-sm">
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-xl bg-[var(--brand-light)] text-[var(--brand)] flex items-center justify-center">
@@ -135,6 +233,83 @@ export default function DashboardPage() {
 
         </div>
       </main>
+
+      {/* ANNOUNCEMENT DETAIL POPUP */}
+      {selectedAnnouncement && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 pt-[73px]">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setSelectedAnnouncement(null)} />
+          <div className="bg-white w-full max-w-2xl rounded-[48px] p-12 shadow-2xl relative z-10 animate-in slide-in-from-bottom-8 duration-500 max-h-[85vh] overflow-y-auto custom-scrollbar">
+            <button
+              onClick={() => setSelectedAnnouncement(null)}
+              className="absolute top-10 right-10 w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-50 hover:bg-slate-100 text-slate-400 transition-all hover:scale-110 active:scale-95"
+            >
+              <X size={20} strokeWidth={3} />
+            </button>
+
+            <div className="flex items-start gap-5 mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--brand)] to-[var(--brand-dark)] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[var(--brand)]/20">
+                <Megaphone size={24} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">{selectedAnnouncement.title}</h2>
+                <div className="flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <span>{new Date(selectedAnnouncement.createdAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</span>
+                  {selectedAnnouncement.teacher?.name && (
+                    <>
+                      <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                      <span>{selectedAnnouncement.teacher.name}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Groups chips */}
+            {selectedAnnouncement.groups && selectedAnnouncement.groups.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-6">
+                {selectedAnnouncement.groups.map((g: any) => (
+                  <span key={g.id} className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-[var(--brand-light)] text-[var(--brand-dark)] border border-[var(--brand-light)]">
+                    {g.name}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Rich text content */}
+            <div
+              className="prose prose-sm max-w-none text-slate-700 mb-8 [&_p]:mb-3 [&_h1]:text-xl [&_h1]:font-black [&_h2]:text-lg [&_h2]:font-black [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-4 [&_a]:text-[var(--brand)] [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-[var(--brand-light)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_img]:rounded-2xl [&_img]:max-w-full"
+              dangerouslySetInnerHTML={{ __html: selectedAnnouncement.content }}
+            />
+
+            {/* Attachments */}
+            {Array.isArray(selectedAnnouncement.attachments) && selectedAnnouncement.attachments.length > 0 && (
+              <div className="bg-slate-50 rounded-[24px] border border-slate-100 p-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Attachments</p>
+                <div className="space-y-2">
+                  {selectedAnnouncement.attachments.map((att: any, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleDownload(att.url, att.name)}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border border-slate-100 hover:border-[var(--brand-light)] hover:shadow-sm transition-all cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center">
+                        <AnnouncementAttachIcon type={att.type} />
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-xs font-black text-slate-700 truncate">{att.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400">
+                          {att.size ? `${(att.size / 1024).toFixed(0)} KB` : "File"}
+                        </p>
+                      </div>
+                      <span className="flex items-center gap-1 text-[10px] font-black text-[var(--brand)] uppercase tracking-widest"><Download size={12} /> Download</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -151,4 +326,10 @@ function QuickLink({ icon, label, sub }: { icon: string; label: string; sub: str
       </div>
     </button>
   );
+}
+
+function AnnouncementAttachIcon({ type }: { type: string }) {
+  if (type?.startsWith("image/")) return <ImageIcon size={16} className="text-blue-500" />;
+  if (type?.includes("pdf")) return <FileText size={16} className="text-rose-500" />;
+  return <File size={16} className="text-slate-400" />;
 }

@@ -6,7 +6,17 @@ import { TeacherService } from "@/services/api/TeacherService";
 import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 import { useToast } from "@/app/components/Common/Toast";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Users, GraduationCap, X, Search, Filter, Mail, Calendar, CheckCircle2, Trash2, ClipboardList } from "lucide-react";
+import { Users, GraduationCap, X, Search, Filter, Mail, Calendar, CheckCircle2, Trash2, ClipboardList, Megaphone } from "lucide-react";
+import GroupsTab from "@/app/components/Teacher/GroupsTab";
+import AnnouncementsTab from "@/app/components/Teacher/AnnouncementsTab";
+
+type Tab = "roster" | "groups" | "announcements";
+
+const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "roster", label: "Student Roster", icon: <GraduationCap size={15} /> },
+    { key: "groups", label: "Groups", icon: <Users size={15} /> },
+    { key: "announcements", label: "Announcements", icon: <Megaphone size={15} /> },
+];
 
 export default function TeacherStudentsPage() {
     const { error: toastError } = useToast();
@@ -15,6 +25,7 @@ export default function TeacherStudentsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const debouncedSearchQuery = useDebounce(searchQuery, 300);
     const [selectedStudent, setSelectedStudent] = useState<any>(null);
+    const [activeTab, setActiveTab] = useState<Tab>("roster");
     const router = useRouter();
 
     useEffect(() => {
@@ -74,11 +85,40 @@ export default function TeacherStudentsPage() {
             <Navbar userRole="teacher" />
 
             <main className="max-w-[1440px] mx-auto px-6 lg:px-12 py-10 animate-fade-in relative">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                     <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Student Roster</h1>
-                        <p className="text-slate-400 font-bold text-sm mt-1">Monitor academic performance and learning progress.</p>
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Students &amp; Groups</h1>
+                        <p className="text-slate-400 font-bold text-sm mt-1">Manage students, groups, and announcements.</p>
                     </div>
+                </div>
+
+                {/* ─── TABS ─── */}
+                <div className="flex items-center gap-1 mb-10 bg-white/60 border border-slate-100 rounded-2xl p-1.5 w-fit shadow-sm backdrop-blur-sm">
+                    {TABS.map(tab => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setActiveTab(tab.key)}
+                            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
+                                activeTab === tab.key
+                                    ? "bg-[var(--brand)] text-white shadow-lg shadow-[var(--brand)]/20"
+                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                            }`}
+                        >
+                            {tab.icon} {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* ─── GROUPS TAB ─── */}
+                {activeTab === "groups" && <GroupsTab />}
+
+                {/* ─── ANNOUNCEMENTS TAB ─── */}
+                {activeTab === "announcements" && <AnnouncementsTab />}
+
+                {/* ─── ROSTER TAB ─── */}
+                {activeTab === "roster" && (
+                <>
+                <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-3">
                         <div className="bg-white border border-slate-200 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-sm">
                             <Users size={18} className="text-slate-400" />
@@ -87,10 +127,10 @@ export default function TeacherStudentsPage() {
                                 <p className="text-lg font-black text-slate-800 leading-none mt-1">{students.length}</p>
                             </div>
                         </div>
-                        <button className="px-6 py-4 bg-white border border-slate-200 text-slate-600 font-black text-xs rounded-2xl hover:bg-slate-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
-                            Export PDF
-                        </button>
                     </div>
+                    <button className="px-6 py-4 bg-white border border-slate-200 text-slate-600 font-black text-xs rounded-2xl hover:bg-slate-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
+                        Export PDF
+                    </button>
                 </div>
 
                 <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden z-0 relative">
@@ -179,6 +219,8 @@ export default function TeacherStudentsPage() {
                         </table>
                     </div>
                 </div>
+                </>
+                )}
             </main>
 
             {/* PREVIEW POPUP */}

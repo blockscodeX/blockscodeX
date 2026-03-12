@@ -172,6 +172,20 @@ export class MonitoringGateway
         @MessageBody() data: { sessionId: string; answer: any },
         @ConnectedSocket() client: Socket,
     ) {
+        // Immediate Redis cache for fast reads on page refresh/resume
+        // This ensures answers are available even before the BullMQ job processes
+        try {
+            const redisKey = `session:answers:${data.sessionId}`;
+            const existing = await this.redis.get(redisKey);
+            const current = existing ? JSON.parse(existing) : {};
+            const merged = { ...current, ...data.answer };
+            // Cache for 6 hours (longer than most exams)
+            await this.redis.set(redisKey, JSON.stringify(merged), 'EX', 21600);
+        } catch (e) {
+            console.error('[MonitoringGateway] Redis answer cache failed:', e);
+        }
+
+        // Queue for persistent DB save (async, may have slight delay)
         await this.submissionService.queueAnswer(data.sessionId, data.answer);
         return { status: 'saved' };
     }
@@ -183,6 +197,10 @@ export class MonitoringGateway
     ) {
         // Can be used to track last seen timestamp in Redis for precise online status
         // await this.redis.set(`session:last_seen:${data.sessionId}`, Date.now(), 'EX', 60);
+        
+        // Emit explicit acknowledgement for client-side heartbeat tracking
+        client.emit('heartbeat_ack', { timestamp: Date.now() });
+        
         return { status: 'alive' };
     }
 

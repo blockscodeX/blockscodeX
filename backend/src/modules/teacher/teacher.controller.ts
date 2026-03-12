@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, BadRequestException, Query, Req } from '@nestjs/common';
 import { TeacherService } from './teacher.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrgFeaturesGuard } from '../auth/guards/org-features.guard';
 import { OrgStatusGuard } from '../auth/guards/org-status.guard';
 import { RequireOrgFeature } from '../auth/org-feature.decorator';
 import { User } from '../auth/user.decorator';
+import type { FastifyRequest } from 'fastify';
 
 @Controller('teacher')
 @UseGuards(JwtAuthGuard, OrgStatusGuard)
@@ -207,5 +208,109 @@ export class TeacherController {
     ) {
         return this.teacherService.unterminateExamSession(examId, userId, user);
     }
-}
 
+    // ─── GROUPS ────────────────────────────────────────────────────────────────
+
+    @Get('groups')
+    async getGroups(@User() user: any) {
+        return this.teacherService.getGroups(user);
+    }
+
+    @Get('groups/:id')
+    async getGroup(@Param('id') id: string, @User() user: any) {
+        return this.teacherService.getGroup(id, user);
+    }
+
+    @Post('groups')
+    async createGroup(@Body() data: { name: string; emails?: string[] }, @User() user: any) {
+        return this.teacherService.createGroup(user, data);
+    }
+
+    @Put('groups/:id')
+    async updateGroup(@Param('id') id: string, @Body() data: { name: string }, @User() user: any) {
+        return this.teacherService.updateGroup(id, user, data);
+    }
+
+    @Delete('groups/:id')
+    async deleteGroup(@Param('id') id: string, @User() user: any) {
+        return this.teacherService.deleteGroup(id, user);
+    }
+
+    @Post('groups/:id/students')
+    async addGroupStudents(
+        @Param('id') id: string,
+        @Body() data: { emails: string[] },
+        @User() user: any
+    ) {
+        return this.teacherService.addGroupStudents(id, data.emails, user);
+    }
+
+    @Delete('groups/:id/students/:studentId')
+    async removeGroupStudent(
+        @Param('id') id: string,
+        @Param('studentId') studentId: string,
+        @User() user: any
+    ) {
+        return this.teacherService.removeGroupStudent(id, studentId, user);
+    }
+
+    @Post('courses/:courseId/enroll-group/:groupId')
+    async enrollGroupInCourse(
+        @Param('courseId') courseId: string,
+        @Param('groupId') groupId: string,
+        @User() user: any
+    ) {
+        return this.teacherService.enrollGroupInCourse(courseId, groupId, user);
+    }
+
+    // ─── ANNOUNCEMENTS ─────────────────────────────────────────────────────────
+
+    @Get('announcements')
+    async getAnnouncements(@User() user: any) {
+        return this.teacherService.getAnnouncements(user);
+    }
+
+    @Post('announcements')
+    async createAnnouncement(
+        @Body() data: { title: string; content: string; groupIds: string[]; attachments?: any[] },
+        @User() user: any
+    ) {
+        return this.teacherService.createAnnouncement(user, data);
+    }
+
+    @Delete('announcements/:id')
+    async deleteAnnouncement(@Param('id') id: string, @User() user: any) {
+        return this.teacherService.deleteAnnouncement(id, user);
+    }
+
+    @Post('announcements/upload')
+    async uploadAnnouncementFile(@User() user: any, @Req() req: FastifyRequest) {
+        const multipartReq = req as any;
+        if (!multipartReq.isMultipart()) {
+            throw new BadRequestException('Request must be multipart/form-data');
+        }
+
+        const parts = multipartReq.parts();
+        const fileSizeHeader = req.headers['x-file-size'];
+        const fileSize = fileSizeHeader ? parseInt(fileSizeHeader as string, 10) : undefined;
+
+        for await (const part of parts) {
+            if (part.type === 'file' && part.fieldname === 'file') {
+                // Buffer the file so we always have a known content length
+                const buffer = await part.toBuffer();
+                const actualSize = fileSize || buffer.length;
+                const url = await this.teacherService.uploadAnnouncementFile(
+                    buffer,
+                    part.filename,
+                    part.mimetype,
+                    actualSize
+                );
+                return { url, name: part.filename, type: part.mimetype, size: actualSize };
+            } else if (part.type === 'file') {
+                await part.toBuffer(); // consume unused parts
+            }
+        }
+
+        throw new BadRequestException('No file provided');
+    }
+}

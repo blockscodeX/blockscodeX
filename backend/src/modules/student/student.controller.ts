@@ -90,4 +90,21 @@ export class StudentController {
     async getCourseProgress(@User() user: any, @Param('slug') slug: string) {
         return this.studentService.getCourseProgress(user.id, slug);
     }
+
+    // ─── ANNOUNCEMENTS ─────────────────────────────────────────────────────────
+
+    @Get('announcements')
+    async getAnnouncements(@User() user: any) {
+        return this.studentService.getAnnouncements(user.id);
+    }
+
+    @Get('announcements/unread-count')
+    async getUnreadAnnouncementCount(@User() user: any) {
+        return this.studentService.getUnreadAnnouncementCount(user.id);
+    }
+
+    @Post('announcements/:id/read')
+    async markAnnouncementRead(@User() user: any, @Param('id') id: string) {
+        return this.studentService.markAnnouncementRead(user.id, id);
+    }
 }

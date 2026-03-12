@@ -752,4 +752,83 @@ export class StudentService {
             attempts: attemptsMap
         };
     }
+
+    // ─── ANNOUNCEMENTS ─────────────────────────────────────────────────────────
+
+    async getAnnouncements(userId: string) {
+        // Find all groups this student belongs to
+        const studentGroups = await this.prisma.studentGroup.findMany({
+            where: { students: { some: { id: userId } } },
+            select: { id: true }
+        });
+
+        if (studentGroups.length === 0) return [];
+
+        const groupIds = studentGroups.map(g => g.id);
+
+        // Get all announcements sent to these groups
+        const announcements = await this.prisma.announcement.findMany({
+            where: {
+                groups: { some: { id: { in: groupIds } } }
+            },
+            include: {
+                teacher: { select: { name: true, profilePicture: true } },
+                groups: { select: { id: true, name: true } },
+                reads: {
+                    where: { userId },
+                    select: { id: true, readAt: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+
+        return announcements.map(a => ({
+            id: a.id,
+            title: a.title,
+            content: a.content,
+            attachments: a.attachments,
+            teacherName: a.teacher.name || 'Teacher',
+            teacherPicture: a.teacher.profilePicture,
+            groupNames: a.groups.map(g => g.name),
+            isRead: a.reads.length > 0,
+            readAt: a.reads[0]?.readAt || null,
+            createdAt: a.createdAt
+        }));
+    }
+
+    async getUnreadAnnouncementCount(userId: string) {
+        const studentGroups = await this.prisma.studentGroup.findMany({
+            where: { students: { some: { id: userId } } },
+            select: { id: true }
+        });
+
+        if (studentGroups.length === 0) return { count: 0 };
+
+        const groupIds = studentGroups.map(g => g.id);
+
+        const total = await this.prisma.announcement.count({
+            where: { groups: { some: { id: { in: groupIds } } } }
+        });
+
+        const read = await this.prisma.announcementRead.count({
+            where: {
+                userId,
+                announcement: { groups: { some: { id: { in: groupIds } } } }
+            }
+        });
+
+        return { count: total - read };
+    }
+
+    async markAnnouncementRead(userId: string, announcementId: string) {
+        // Upsert to avoid duplicate errors
+        return this.prisma.announcementRead.upsert({
+            where: {
+                userId_announcementId: { userId, announcementId }
+            },
+            create: { userId, announcementId },
+            update: {} // No update needed, just ensure it exists
+        });
+    }
 }

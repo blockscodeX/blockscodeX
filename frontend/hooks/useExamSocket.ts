@@ -3,12 +3,18 @@ import { io, Socket } from 'socket.io-client';
 import { useToast } from '../app/components/Common/Toast';
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000';
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const MAX_MISSED_HEARTBEATS = 3;
 
 export const useExamSocket = (examId: string, userId: string, sessionId: string, isNotFound: boolean = false) => {
     const socketRef = useRef<Socket | null>(null);
     const [activeSocket, setActiveSocket] = useState<Socket | null>(null);
+    const [isConnected, setIsConnected] = useState(false);
+    const [missedHeartbeats, setMissedHeartbeats] = useState(0);
     const { error: toastError, warning } = useToast();
     const isKicked = useRef(false);
+    const lastHeartbeatAck = useRef<number>(Date.now());
+    const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Unique Identity (Stable across lifecycle, generated if missing)
     const [identity] = useState(() => {
@@ -33,6 +39,7 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
         // Do NOT connect socket if exam is not found or if critical params are missing
         if (!examId || !userId || isKicked.current || isNotFound) {
             console.log('[Socket] Skipping connection:', { examId, userId, isNotFound });
+            setIsConnected(false);
             return;
         }
 
@@ -42,7 +49,9 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
         const socket = io(`${SOCKET_URL}/proctoring`, {
             transports: ['websocket'],
             reconnection: true,
-            reconnectionAttempts: 5,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 10000,
             withCredentials: true,
             auth: {
                 token: token
@@ -54,6 +63,10 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
 
         socket.on('connect', () => {
             console.log(`[Socket] Connected to Proctoring Gateway (${socket.id})`);
+            setIsConnected(true);
+            setMissedHeartbeats(0);
+            lastHeartbeatAck.current = Date.now();
+            
             socket.emit('join_exam', {
                 examId,
                 userId,
@@ -61,6 +74,12 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
                 deviceId: identity.deviceId,
                 tabId: identity.tabId
             });
+        });
+
+        // Heartbeat acknowledgement from server
+        socket.on('heartbeat_ack', () => {
+            lastHeartbeatAck.current = Date.now();
+            setMissedHeartbeats(0);
         });
 
         socket.on('error', (data: any) => {
@@ -111,6 +130,7 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
 
         socket.on('disconnect', (reason) => {
             console.warn('Disconnected:', reason);
+            setIsConnected(false);
             if (reason === 'io server disconnect' || isKicked.current) {
                 console.log('Forcefully disconnected (Takeover). No auto-reconnect.');
             } else if (reason === 'transport close' || reason === 'ping timeout') {
@@ -121,21 +141,86 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
 
         return () => {
             socket.disconnect();
+            setIsConnected(false);
         };
-    }, [examId, userId, toastError, identity]);
+    }, [examId, userId, toastError, identity, isNotFound]);
 
-    // WebSocket Heartbeat
+    // WebSocket Heartbeat with missed heartbeat tracking and auto-refresh
     useEffect(() => {
-        if (!activeSocket || !sessionId || isKicked.current) return;
-
-        const heartbeatInterval = setInterval(() => {
-            if (activeSocket.connected) {
-                activeSocket.emit('heartbeat', { sessionId, timestamp: Date.now() });
+        if (!activeSocket || !sessionId || isKicked.current) {
+            if (heartbeatIntervalRef.current) {
+                clearInterval(heartbeatIntervalRef.current);
+                heartbeatIntervalRef.current = null;
             }
-        }, 30000);
+            return;
+        }
 
-        return () => clearInterval(heartbeatInterval);
-    }, [activeSocket, sessionId]);
+        const checkHeartbeat = () => {
+            const now = Date.now();
+            const timeSinceLastAck = now - lastHeartbeatAck.current;
+
+            // If socket is connected, send heartbeat
+            if (activeSocket.connected) {
+                activeSocket.emit('heartbeat', { sessionId, timestamp: now });
+                
+                // Check if we haven't received an ack in over 35 seconds (allowing 5s buffer)
+                if (timeSinceLastAck > HEARTBEAT_INTERVAL + 5000) {
+                    setMissedHeartbeats(prev => {
+                        const newCount = prev + 1;
+                        console.warn(`[Socket] Missed heartbeat #${newCount}. Last ack: ${timeSinceLastAck}ms ago`);
+                        
+                        if (newCount >= MAX_MISSED_HEARTBEATS) {
+                            console.error('[Socket] Max missed heartbeats reached. Refreshing page...');
+                            warning('Connection lost. Reconnecting...', 'Connection Issue', 3000);
+                            
+                            // Clean up before refresh
+                            if (heartbeatIntervalRef.current) {
+                                clearInterval(heartbeatIntervalRef.current);
+                            }
+                            
+                            // Refresh the page after a short delay
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1500);
+                        }
+                        return newCount;
+                    });
+                }
+            } else {
+                // Socket not connected - increment missed heartbeats
+                setMissedHeartbeats(prev => {
+                    const newCount = prev + 1;
+                    console.warn(`[Socket] Socket disconnected. Missed heartbeat #${newCount}`);
+                    
+                    if (newCount >= MAX_MISSED_HEARTBEATS) {
+                        console.error('[Socket] Max missed heartbeats reached (disconnected). Refreshing page...');
+                        warning('Connection lost. Reconnecting...', 'Connection Issue', 3000);
+                        
+                        if (heartbeatIntervalRef.current) {
+                            clearInterval(heartbeatIntervalRef.current);
+                        }
+                        
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    }
+                    return newCount;
+                });
+            }
+        };
+
+        // Initial heartbeat ack timestamp
+        lastHeartbeatAck.current = Date.now();
+        
+        heartbeatIntervalRef.current = setInterval(checkHeartbeat, HEARTBEAT_INTERVAL);
+
+        return () => {
+            if (heartbeatIntervalRef.current) {
+                clearInterval(heartbeatIntervalRef.current);
+                heartbeatIntervalRef.current = null;
+            }
+        };
+    }, [activeSocket, sessionId, warning]);
 
     const saveAnswer = useCallback((questionId: string, answer: any) => {
         if (!isKicked.current && socketRef.current?.connected && sessionId) {
@@ -170,6 +255,10 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
         if (socketRef.current) {
             socketRef.current.disconnect();
         }
+        if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+        }
     }, []);
 
     return {
@@ -178,6 +267,7 @@ export const useExamSocket = (examId: string, userId: string, sessionId: string,
         logViolation,
         saveReviewStatus,
         disconnect,
-        isConnected: activeSocket?.connected && !isKicked.current
+        isConnected,
+        missedHeartbeats
     };
 };

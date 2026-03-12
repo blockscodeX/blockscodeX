@@ -53,6 +53,12 @@ model User {
   progress CourseProgress[]
   questionAttempts QuestionAttempt[]
 
+  // Groups & Announcements
+  teacherGroups        StudentGroup[]  @relation("TeacherGroups")
+  groupMemberships     StudentGroup[]  @relation("GroupStudents")
+  teacherAnnouncements Announcement[]  @relation("TeacherAnnouncements")
+  readAnnouncements    AnnouncementRead[]
+
   orgId        String?
   organization Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
 
@@ -327,6 +333,10 @@ model Organization {
   courses Course[]
   exams   Exam[]
 
+  // Groups & Announcements
+  studentGroups StudentGroup[]
+  announcements Announcement[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -390,4 +400,62 @@ model QuestionAttempt {
   @@index([type])
   @@index([userId, createdAt])  // Used in analytics time-range queries
   @@index([sessionId])          // Used in attempt rollups
+}
+
+// ─── Groups & Announcements ────────────────────────────────────────────────────
+
+model StudentGroup {
+  id        String   @id @default(uuid())
+  name      String
+  teacherId String
+  teacher   User     @relation("TeacherGroups", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  orgId        String?
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  students      User[]         @relation("GroupStudents")
+  announcements Announcement[] @relation("AnnouncementGroups")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@index([orgId])
+}
+
+model Announcement {
+  id          String @id @default(uuid())
+  title       String
+  content     String // HTML from Tiptap rich text editor
+  attachments Json   @default("[]") // Array of { name, url, type, size }
+
+  teacherId String
+  teacher   User   @relation("TeacherAnnouncements", fields: [teacherId], references: [id], onDelete: Cascade)
+
+  orgId        String?
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  groups StudentGroup[] @relation("AnnouncementGroups")
+  reads  AnnouncementRead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@index([orgId])
+  @@index([createdAt])
+}
+
+model AnnouncementRead {
+  id             String   @id @default(uuid())
+  userId         String
+  announcementId String
+  readAt         DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, announcementId])
+  @@index([userId])
+  @@index([announcementId])
 }

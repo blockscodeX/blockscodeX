@@ -28,6 +28,8 @@ interface CodingQuestionRendererProps {
     setExecutionResults: (val: any[]) => void;
     examId?: string;
     hideSubmit?: boolean;
+    isExamMode?: boolean;
+    onCheatDetected?: (reason: string) => void;
 }
 
 export default function CodingQuestionRenderer({
@@ -47,7 +49,9 @@ export default function CodingQuestionRenderer({
     executionResults,
     setExecutionResults,
     examId,
-    hideSubmit = false
+    hideSubmit = false,
+    isExamMode = false,
+    onCheatDetected
 }: CodingQuestionRendererProps) {
 
     // Templates & allowed languages may come from the question (teacher config)
@@ -63,7 +67,30 @@ export default function CodingQuestionRenderer({
 
     // Persistence Logic
     const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
+    
+    // On mount, sync localStorage from currentAnswer if localStorage is empty
+    // This handles the case where user opens exam on a new device
+    useEffect(() => {
+        setMounted(true);
+        
+        // Restore from currentAnswer if localStorage is empty
+        if (typeof window !== 'undefined' && currentAnswer && !hasAttemptSelected) {
+            const parsed = parseAnswer(currentAnswer);
+            const answerLangId = currentAnswer?.languageId;
+            
+            // If currentAnswer has code, sync it to localStorage
+            if (parsed && typeof parsed === 'string' && parsed.length > 0) {
+                // Determine which language this answer belongs to
+                const targetLangId = answerLangId || question.codingConfig?.languageId || activeLangId;
+                const key = `unit_progress_${question.id}_${targetLangId}`;
+                
+                // Only populate if localStorage doesn't already have a value
+                if (!localStorage.getItem(key)) {
+                    localStorage.setItem(key, parsed);
+                }
+            }
+        }
+    }, [question.id]); // Only run once per question
 
     // Restore execution results from saved answer
     useEffect(() => {
@@ -88,14 +115,12 @@ export default function CodingQuestionRenderer({
             localStorage.setItem(key, newCode);
         }
         if (onAnswerChange) {
-            if (executionResults && executionResults.length > 0) {
-                onAnswerChange({
-                    code: newCode,
-                    results: executionResults
-                });
-            } else {
-                onAnswerChange(newCode);
-            }
+            // Always include languageId so we know which language the code belongs to
+            onAnswerChange({
+                code: newCode,
+                languageId: activeLangId,
+                results: executionResults && executionResults.length > 0 ? executionResults : undefined
+            });
         }
     };
 
@@ -116,18 +141,55 @@ export default function CodingQuestionRenderer({
     const parseAnswer = (ans: any) => {
         if (typeof ans === 'string') return ans;
         if (ans && ans.code) return ans.code;
-        return ans;
+        return typeof ans === 'string' ? ans : null;
     };
 
     const primaryLangId = question.codingConfig?.languageId;
     const isPrimary = activeLangId === primaryLangId;
+
+    // Determine initialBody for the editor.
+    // We need to handle: localStorage > currentAnswer (with matching language) > template > default
+    const resolveInitialBody = () => {
+        if (hasAttemptSelected) return parseAnswer(attemptAnswer);
+
+        // 1. Per-language localStorage (highest priority - user's latest edits)
+        if (savedAnswer) return savedAnswer;
+
+        // 2. Check currentAnswer from backend (if it matches current language)
+        if (currentAnswer != null) {
+            const answerLangId = currentAnswer?.languageId;
+            const parsed = parseAnswer(currentAnswer);
+            
+            // Use currentAnswer if:
+            // - It has a languageId that matches current language, OR
+            // - It has no languageId but we're on primary language (backwards compatibility)
+            if (parsed && typeof parsed === 'string' && parsed.length > 0) {
+                if (answerLangId === activeLangId || (!answerLangId && isPrimary)) {
+                    return parsed;
+                }
+            }
+        }
+
+        // 3. Language-specific template code
+        if (template.initialCode) return template.initialCode;
+        if (template.body) return template.body;
+
+        // 4. Primary language root config
+        if (isPrimary) {
+            if (question.codingConfig?.initialCode) return question.codingConfig.initialCode;
+            if (question.codingConfig?.body) return question.codingConfig.body;
+        }
+
+        // 5. Base language default
+        return baseLang.initialBody;
+    };
 
     const codingLanguage = {
         ...baseLang,
         id: activeLangId as any,
         header: template.header || template.head || (isPrimary ? (question.codingConfig?.header || question.codingConfig?.head) : "") || "",
         footer: template.footer || template.tail || (isPrimary ? (question.codingConfig?.footer || question.codingConfig?.tail) : "") || "",
-        initialBody: parseAnswer(hasAttemptSelected ? attemptAnswer : (savedAnswer ?? currentAnswer ?? template.initialCode ?? template.body ?? (isPrimary ? (question.codingConfig?.initialCode ?? question.codingConfig?.body) : undefined) ?? baseLang.initialBody)),
+        initialBody: resolveInitialBody(),
     };
 
     const rawTestCases = (question.codingConfig?.testCases || []);
@@ -365,14 +427,25 @@ export default function CodingQuestionRenderer({
                 onRun: (code, input, expected, index) => handleRun(code, input, expected, index),
                 onChange: handleAnswerChangeWithSave,
                 onSubmit: handleSubmit,
-                onReset: handleReset
+                onReset: handleReset,
+                ...(isExamMode && onCheatDetected ? { onCheatDetected } : {})
             }}
             isExecuting={isRunning}
             testCases={displayedTestCases}
             hideLanguageSelector={true}
             customToolbarContent={languageSelector}
             terminalOutput={terminalLogs}
-            options={{ readOnly: hasAttemptSelected }}
+            options={{
+                readOnly: hasAttemptSelected,
+                ...(isExamMode ? {
+                    disablePaste: true,
+                    disableCopy: true,
+                    disableCut: true,
+                    disableRightClick: true,
+                    disableDragDrop: true,
+                    allowInternalCopyPaste: true
+                } : {})
+            }}
             hideSubmit={hideSubmit}
         />
     );

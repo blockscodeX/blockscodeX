@@ -93,26 +93,35 @@ export default function PublicExamPage() {
     const fullscreenToastIdRef = useRef<string | null>(null);
     const hasInteractedRef = useRef(false);
     const debouncedSaveRef = useRef<any>(null);
+    const fiveMinWarningShownRef = useRef(false);
 
     // Exam ID for socket and monitoring
     const examId = slug as string;
+    
+    // Compute userId from localStorage directly for stable reference
+    // This ensures socket has userId available immediately without waiting for user state
+    const [socketUserId, setSocketUserId] = useState<string>('');
+    
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+                const parsed = JSON.parse(storedUser);
+                setUser(parsed);
+                setSocketUserId(parsed.id || parsed.rollNumber || '');
+            }
+        }
+    }, []);
 
     // ===== ALL HOOKS MUST BE CALLED UNCONDITIONALLY BEFORE ANY EARLY RETURNS =====
 
     // Socket Integration (must be called before early return)
-    const { socket, saveAnswer, logViolation: socketLogViolation, saveReviewStatus, disconnect } = useExamSocket(
+    const { socket, saveAnswer, logViolation: socketLogViolation, saveReviewStatus, disconnect, isConnected, missedHeartbeats } = useExamSocket(
         examId,
-        user?.id || user?.rollNumber || '',
+        socketUserId,
         sessionId || '',
         isNotFound
     );
-
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) setUser(JSON.parse(storedUser));
-        }
-    }, []);
 
     useEffect(() => {
         if (isOnline) {
@@ -144,96 +153,76 @@ export default function PublicExamPage() {
 
     const peerInstance = useRef<any>(null);
 
-    useEffect(() => {
-        // Initialize PeerJS only on client
-        if (typeof window === 'undefined' || !isAiProctoringEnabled || isNotFound) return;
+    // PeerJS initialization - COMMENTED OUT (not currently in use)
+    // useEffect(() => {
+    //     // Initialize PeerJS only on client
+    //     if (typeof window === 'undefined' || !isAiProctoringEnabled || isNotFound) return;
+    //
+    //     let peer: any;
+    //     const initPeer = async () => {
+    //         try {
+    //             const { Peer } = await import('peerjs');
+    //             peer = new Peer();
+    //
+    //             peer.on('open', (id: string) => {
+    //                 console.log('[PeerJS] My ID:', id);
+    //             });
+    //
+    //             peerInstance.current = peer;
+    //         } catch (e) {
+    //             console.error("PeerJS init failed", e);
+    //         }
+    //     };
+    //
+    //     initPeer();
+    //
+    //     return () => {
+    //         if (peer) peer.destroy();
+    //     };
+    // }, [isAiProctoringEnabled, isNotFound]);
 
-        let peer: any;
-        const initPeer = async () => {
-            try {
-                const { Peer } = await import('peerjs');
-                peer = new Peer();
-
-                peer.on('open', (id: string) => {
-                    console.log('[PeerJS] My ID:', id);
-                });
-
-                peerInstance.current = peer;
-            } catch (e) {
-                console.error("PeerJS init failed", e);
-            }
-        };
-
-        initPeer();
-
-        return () => {
-            if (peer) peer.destroy();
-        };
-    }, [isAiProctoringEnabled, isNotFound]);
-
-    useEffect(() => {
-        if (!socket || !isAiProctoringEnabled) return;
-
-        const handleRequestStream = async (data: { teacherSocketId: string }) => {
-            console.log("[Proctoring] Received Stream Request from", data.teacherSocketId);
-            info("Proctor is requesting video verification...");
-
-            if (!peerInstance.current || !videoRef.current) {
-                console.warn("[Proctoring] Peer or Video not ready");
-                return;
-            }
-
-            try {
-                // Get stream from video element? Ref srcObject might be set by hook
-                const stream = videoRef.current.srcObject as MediaStream;
-                if (!stream) {
-                    warning("Camera not active for streaming.");
-                    return;
-                }
-
-                // Since we are P2P, we need Teacher's PeerID.
-                // The socket "cmd_request_stream" needs to carry the Teacher's PeerID, OR we use a convention.
-                // Current backend sends `teacherSocketId`.
-                // If we assume teacher uses `peerId = socketId` (not possible usually as peerjs generates ID or we force it).
-                // CORRECTION: Teacher should send THEIR PeerID in the request.
-                // I need to update backend to include teacherPeerId if possible, OR Teacher component sends it in the request payload.
-                // For now, let's assume the data contains `teacherPeerId` (I will ensure Teacher sends it).
-
-                // If data only has `teacherSocketId`, we are stuck unless we relay signals.
-                // PLAN CHANGE: Teacher accepts incoming calls? No, Plan said "Student Client initializes peer.call('teacher-admin', stream)".
-                // Wait, plan said "Student Client initializes peer.call('teacher-admin', stream)".
-                // 'teacher-admin' is a static string? Or unique per teacher?
-                // If unique per teacher, the request needs to allow us to know WHO to call.
-                // I will update the backend listener/Teacher sender to include peerId in the payload.
-                // For now, assuming data has `teacherPeerId`.
-                // If strict "teacher-admin" string in plan means a specific ID usage:
-                // User's phase 2: "Response: Student Client initializes peer.call('teacher-admin', stream)."
-                // NOTE: 'teacher-admin' is generic. If multiple teachers?
-                // I'll assume `data.teacherPeerId` will be provided.
-
-                // TEMPORARY FIX: I will log it. I will implement Teacher side to send `teacherPeerId`.
-                const teacherPeerId = (data as any).teacherPeerId;
-                if (teacherPeerId) {
-                    const call = peerInstance.current.call(teacherPeerId, stream);
-                    console.log("[Proctoring] Calling teacher:", teacherPeerId);
-
-                    call.on('close', () => {
-                        console.log("Stream ended");
-                    });
-                } else {
-                    console.error("No teacherPeerId provided in request");
-                }
-            } catch (err) {
-                console.error("Streaming error", err);
-            }
-        };
-
-        socket.on('cmd_request_stream', handleRequestStream);
-
-        return () => {
-            socket.off('cmd_request_stream', handleRequestStream);
-        };
-    }, [socket, info, warning, isAiProctoringEnabled]);
+    // PeerJS stream request handler - COMMENTED OUT (not currently in use)
+    // useEffect(() => {
+    //     if (!socket || !isAiProctoringEnabled) return;
+    //
+    //     const handleRequestStream = async (data: { teacherSocketId: string }) => {
+    //         console.log("[Proctoring] Received Stream Request from", data.teacherSocketId);
+    //         info("Proctor is requesting video verification...");
+    //
+    //         if (!peerInstance.current || !videoRef.current) {
+    //             console.warn("[Proctoring] Peer or Video not ready");
+    //             return;
+    //         }
+    //
+    //         try {
+    //             const stream = videoRef.current.srcObject as MediaStream;
+    //             if (!stream) {
+    //                 warning("Camera not active for streaming.");
+    //                 return;
+    //             }
+    //
+    //             const teacherPeerId = (data as any).teacherPeerId;
+    //             if (teacherPeerId) {
+    //                 const call = peerInstance.current.call(teacherPeerId, stream);
+    //                 console.log("[Proctoring] Calling teacher:", teacherPeerId);
+    //
+    //                 call.on('close', () => {
+    //                     console.log("Stream ended");
+    //                 });
+    //             } else {
+    //                 console.error("No teacherPeerId provided in request");
+    //             }
+    //         } catch (err) {
+    //             console.error("Streaming error", err);
+    //         }
+    //     };
+    //
+    //     socket.on('cmd_request_stream', handleRequestStream);
+    //
+    //     return () => {
+    //         socket.off('cmd_request_stream', handleRequestStream);
+    //     };
+    // }, [socket, info, warning, isAiProctoringEnabled]);
 
     useEffect(() => {
         if (!slug) return;
@@ -273,54 +262,28 @@ export default function PublicExamPage() {
                     }
                 }
 
-                // 0.1 MANDATORY LOGIN CHECK for specific slug
+                // 0.1 MANDATORY EXAM-SPECIFIC LOGIN CHECK
+                // The exam page MUST require exam login, regardless of dashboard login status.
+                // This prevents students who are logged into the dashboard from bypassing exam login.
                 if (typeof window !== 'undefined') {
-                    // Check logic optimized in recent conversation
-                    const isAuthorized = localStorage.getItem(`exam_${slug}_auth`);
-                    const storedUserRaw = localStorage.getItem('user');
+                    const isExamAuthorized = localStorage.getItem(`exam_${slug}_auth`);
+                    const examMetadata = localStorage.getItem(`exam_${slug}_metadata`);
 
-                    // If NO auth marker AND NO user session, then redirect
-                    if (!isAuthorized && !storedUserRaw) {
-                        // Double check if cookie exists via simple fetch? No, cannot check HttpOnly cookie.
-                        // But if we came from login, localStorage should be set.
-                        // Maybe the user is coming back later and localStorage is gone but cookie remains?
-                        // If cookie remains, we should try to fetch the exam and see if it works.
-                        // If it works (200 OK), we can restore localStorage or proceed.
-
-                        // BUT, `getExamBySlug` below will do exactly that.
-                        // So maybe we should RELAX this check and let `getExamBySlug` fail with 401 if truly unauth.
-
-                        // However, if we remove this, unidentified users will try to fetch exam.
-                        // If `storedUserRaw` is missing, the UI will break mainly because `user` state is null.
-                        // We need `user` object for socket connection.
-
-                        // Fix: if no localStorage 'user', try to fetch /auth/me or profile via proxy to restore it?
-                        // Or just redirect.
-
-                        // In the loop case: User logs in -> setItem -> redirect -> loadExamData -> getItem.
-                        // This should work.
-
-                        // Unless... the slog in `exam_${slug}_auth` differs from `slug` param?
-
-                        // Let's degrade this "Redirect Immediately" to "Log Warning" and verify in step 1.
-                        console.log(`[ExamPage] Local auth check failed for ${slug}. Will verify via API.`);
-                        //  router.replace(`/exam/login?slug=${slug}`);
-                        //  return;
+                    // STRICT CHECK: Both exam auth marker AND exam metadata must exist
+                    // This ensures the user went through the exam login flow
+                    if (!isExamAuthorized || !examMetadata) {
+                        console.log(`[ExamPage] Exam-specific auth missing for ${slug}. Redirecting to exam login.`);
+                        router.replace(`/exam/login?slug=${slug}`);
+                        return;
                     }
                 }
 
-                // 0.2 Check Auth First (Global)
+                // 0.2 Check User Object (Required for socket/UI)
                 const storedUserRaw = localStorage.getItem('user');
                 if (!storedUserRaw) {
-                    // If we dont have user object, we can't initialize socket or UI properly.
-                    // We must attempt to restore it from server if cookie exists.
-                    // Or redirect.
-
-                    // Note: If the user just logged in, storedUserRaw SHOULD be there.
-                    // If it is NOT there, maybe the `slug` mismatch caused the Login page to NOT set `exam_${slug}_auth`?
-                    // But `user` is global.
-
-                    console.log('No user found in localStorage, redirecting to login');
+                    // User object missing - this shouldn't happen if exam login was successful
+                    // but handle it gracefully
+                    console.log('[ExamPage] No user found in localStorage, redirecting to login');
                     router.replace(`/exam/login?slug=${slug}`);
                     return;
                 }
@@ -454,6 +417,21 @@ export default function PublicExamPage() {
                     // Standardize internal markers (flatten if they came from _internal_position)
                     if (restoredAllAnswers['_internal_position']) {
                         restoredAllAnswers = { ...restoredAllAnswers, ...restoredAllAnswers['_internal_position'] };
+                    }
+
+                    // Sync coding answers to localStorage so CodingQuestionRenderer picks them up
+                    // This handles: refresh on same device AND resume on new device
+                    for (const [qId, ans] of Object.entries(restoredAllAnswers)) {
+                        if (qId.startsWith('_')) continue; // Skip internal markers
+                        if (ans && typeof ans === 'object' && ans.code && typeof ans.code === 'string') {
+                            // This is a coding answer with {code, languageId, results}
+                            const langId = ans.languageId || 'default';
+                            const key = `unit_progress_${qId}_${langId}`;
+                            // Only populate if localStorage doesn't already have a more recent value
+                            if (!localStorage.getItem(key)) {
+                                localStorage.setItem(key, ans.code);
+                            }
+                        }
                     }
 
                     setUserAnswers(restoredAllAnswers);
@@ -651,6 +629,12 @@ export default function PublicExamPage() {
             return;
         }
 
+        // Show 5-minute warning (only once)
+        if (timeLeft === 300 && !fiveMinWarningShownRef.current) {
+            fiveMinWarningShownRef.current = true;
+            warning("Only 5 minutes remaining! Please review and submit your answers.", "Time Warning", 8000);
+        }
+
         const timer = setInterval(() => {
             setTimeLeft(prev => {
                 if (prev === null || prev <= 0) {
@@ -662,7 +646,7 @@ export default function PublicExamPage() {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [isFeedbackMode, isSuccessMode, submitFullExam]);
+    }, [timeLeft, isFeedbackMode, isSuccessMode, submitFullExam, warning]);
 
     const formatTime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -768,13 +752,36 @@ export default function PublicExamPage() {
     }, [currentQuestionId, saveAnswer]);
 
     // ... (useEffect hooks for focus monitoring could remain here or be moved to useElectronMonitoring if refactored further)
-    // For now, keeping existing local focus logic but we could enhance it to call logEvent
+    // Enhanced focus monitoring: detects both tab switches AND app switches (Alt+Tab, clicking outside browser)
     useEffect(() => {
         if (isFeedbackMode || isSuccessMode) return;
 
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                socketLogViolation('TAB_SWITCH_IN', 'Student switched back to exam tab');
+        // Grace period: Ignore blur/focus events for the first few seconds after mount
+        // to prevent false positives during page load/refresh
+        let isGracePeriod = true;
+        const graceTimer = setTimeout(() => { isGracePeriod = false; }, 4000);
+
+        // Track if we're currently focused to prevent duplicate events
+        let isFocused = document.hasFocus();
+
+        // Track if user is navigating away (beforeunload) to prevent false tab switch on refresh
+        let isUnloading = false;
+        const handleBeforeUnload = () => { isUnloading = true; };
+
+        const handleFocusLoss = (source: string) => {
+            if (isGracePeriod || isUnloading) return; // Ignore during grace period or page unload
+            if (isFocused) {
+                isFocused = false;
+                socketLogViolation('TAB_SWITCH_OUT', `Student switched away from exam (${source})`);
+                setWindowFocus(prev => ({ ...prev, out: prev.out + 1 }));
+            }
+        };
+
+        const handleFocusGain = (source: string) => {
+            if (isGracePeriod) return; // Ignore during grace period
+            if (!isFocused) {
+                isFocused = true;
+                socketLogViolation('TAB_SWITCH_IN', `Student returned to exam (${source})`);
                 setWindowFocus(prev => {
                     const newIn = prev.in + 1;
                     if (tabSwitchLimit && newIn >= tabSwitchLimit) {
@@ -782,17 +789,94 @@ export default function PublicExamPage() {
                     }
                     return { ...prev, in: newIn };
                 });
-            } else {
-                socketLogViolation('TAB_SWITCH_OUT', 'Student switched away from exam tab');
-                setWindowFocus(prev => ({ ...prev, out: prev.out + 1 }));
             }
         };
 
+        // Visibility change - fires when tab is switched in browser
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                handleFocusGain('tab visible');
+            } else {
+                handleFocusLoss('tab hidden');
+            }
+        };
+
+        // Window blur - fires when browser loses focus (Alt+Tab, clicking other app, etc.)
+        const handleWindowBlur = () => {
+            handleFocusLoss('window blur');
+        };
+
+        // Window focus - fires when browser regains focus
+        const handleWindowFocus = () => {
+            handleFocusGain('window focus');
+        };
+
         document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.addEventListener("blur", handleWindowBlur);
+        window.addEventListener("focus", handleWindowFocus);
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
         return () => {
+            clearTimeout(graceTimer);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener("blur", handleWindowBlur);
+            window.removeEventListener("focus", handleWindowFocus);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
         };
     }, [socketLogViolation, isFeedbackMode, isSuccessMode, tabSwitchLimit]);
+
+    // === GLOBAL COPY / PASTE / CUT PREVENTION ===
+    useEffect(() => {
+        if (isFeedbackMode || isSuccessMode) return;
+
+        // Helper to check if event originates from CodeMirror editor (internal clipboard allowed there)
+        const isFromCodeEditor = (target: EventTarget | null): boolean => {
+            if (!target || !(target instanceof HTMLElement)) return false;
+            // CodeMirror uses .cm-editor as the root class
+            return target.closest('.cm-editor') !== null;
+        };
+
+        const handlePaste = (e: ClipboardEvent) => {
+            // Let CodeMirror handle paste internally (it uses internal clipboard)
+            if (isFromCodeEditor(e.target)) return;
+            e.preventDefault();
+            warning("Pasting is not allowed during the exam.", "Paste Blocked", 4000);
+            socketLogViolation('PASTE_ATTEMPT', 'Student attempted to paste content');
+        };
+        const handleCopy = (e: ClipboardEvent) => {
+            // Let CodeMirror handle copy internally
+            if (isFromCodeEditor(e.target)) return;
+            e.preventDefault();
+            socketLogViolation('COPY_ATTEMPT', 'Student attempted to copy content');
+        };
+        const handleCut = (e: ClipboardEvent) => {
+            // Let CodeMirror handle cut internally
+            if (isFromCodeEditor(e.target)) return;
+            e.preventDefault();
+            socketLogViolation('CUT_ATTEMPT', 'Student attempted to cut content');
+        };
+        const handleContextMenu = (e: MouseEvent) => {
+            e.preventDefault();
+        };
+
+        document.addEventListener('paste', handlePaste, true);
+        document.addEventListener('copy', handleCopy, true);
+        document.addEventListener('cut', handleCut, true);
+        document.addEventListener('contextmenu', handleContextMenu, true);
+
+        return () => {
+            document.removeEventListener('paste', handlePaste, true);
+            document.removeEventListener('copy', handleCopy, true);
+            document.removeEventListener('cut', handleCut, true);
+            document.removeEventListener('contextmenu', handleContextMenu, true);
+        };
+    }, [isFeedbackMode, isSuccessMode, warning, socketLogViolation]);
+
+    // Cheat detection callback for editor components
+    const handleCheatDetected = useCallback((reason: string) => {
+        warning(reason, "Warning", 4000);
+        socketLogViolation('CHEAT_DETECTED', reason);
+    }, [warning, socketLogViolation]);
 
     // Fullscreen Monitoring
     useEffect(() => {
@@ -1246,6 +1330,7 @@ export default function PublicExamPage() {
                                         onSubmit={handleSubmitNext}
                                         currentAnswer={userAnswers[currentQuestionId as string]}
                                         examId={examId}
+                                        onCheatDetected={handleCheatDetected}
                                     />
                                 </div>
                             </div>

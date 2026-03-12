@@ -526,5 +526,174 @@ export const TeacherService = {
             console.error('[TeacherService] Error', error);
             throw error;
         }
+    },
+
+    // ─── GROUPS ────────────────────────────────────────────────────────────────
+
+    async getGroups() {
+        try {
+            const res = await authFetch('/teacher/groups');
+            if (!res.ok) throw new Error('Failed to fetch groups');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async getGroup(id: string) {
+        try {
+            const res = await authFetch(`/teacher/groups/${id}`);
+            if (!res.ok) throw new Error('Failed to fetch group');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async createGroup(data: { name: string; emails?: string[] }) {
+        try {
+            const res = await authFetch('/teacher/groups', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create group');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async updateGroup(id: string, data: { name: string }) {
+        try {
+            const res = await authFetch(`/teacher/groups/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update group');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async deleteGroup(id: string) {
+        try {
+            const res = await authFetch(`/teacher/groups/${id}`, {
+                method: 'DELETE',
+                body: JSON.stringify({})
+            });
+            if (!res.ok) throw new Error('Failed to delete group');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async addGroupStudents(groupId: string, emails: string[]) {
+        try {
+            const res = await authFetch(`/teacher/groups/${groupId}/students`, {
+                method: 'POST',
+                body: JSON.stringify({ emails })
+            });
+            if (!res.ok) throw new Error('Failed to add students to group');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async removeGroupStudent(groupId: string, studentId: string) {
+        try {
+            const res = await authFetch(`/teacher/groups/${groupId}/students/${studentId}`, {
+                method: 'DELETE',
+                body: JSON.stringify({})
+            });
+            if (!res.ok) throw new Error('Failed to remove student from group');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async enrollGroupInCourse(courseId: string, groupId: string) {
+        try {
+            const res = await authFetch(`/teacher/courses/${courseId}/enroll-group/${groupId}`, {
+                method: 'POST',
+                body: JSON.stringify({})
+            });
+            if (!res.ok) throw new Error('Failed to enroll group in course');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    // ─── ANNOUNCEMENTS ─────────────────────────────────────────────────────────
+
+    async getAnnouncements() {
+        try {
+            const res = await authFetch('/teacher/announcements');
+            if (!res.ok) throw new Error('Failed to fetch announcements');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async createAnnouncement(data: { title: string; content: string; groupIds: string[]; attachments?: any[] }) {
+        try {
+            const res = await authFetch('/teacher/announcements', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create announcement');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async deleteAnnouncement(id: string) {
+        try {
+            const res = await authFetch(`/teacher/announcements/${id}`, {
+                method: 'DELETE',
+                body: JSON.stringify({})
+            });
+            if (!res.ok) throw new Error('Failed to delete announcement');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async uploadAnnouncementFile(file: File) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await authFetch('/teacher/announcements/upload', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'x-file-size': String(file.size)
+                }
+            });
+            if (!res.ok) throw new Error('Failed to upload file');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
     }
 };

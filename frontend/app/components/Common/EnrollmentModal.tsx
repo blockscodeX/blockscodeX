@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { siteConfig } from '@/app/config/site';
-import { X, UserPlus, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, UserPlus, Upload, FileText, Download, CheckCircle2, AlertCircle, Loader2, Users } from 'lucide-react';
 import { TeacherService } from '@/services/api/TeacherService';
 import { useToast } from './Toast';
 import BulkImportReportModal from './BulkImportReportModal';
@@ -16,13 +16,27 @@ interface EnrollmentModalProps {
 
 export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId, onEnroll }: EnrollmentModalProps) {
     const { success: toastSuccess, error: toastError } = useToast();
-    const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
+    const [activeTab, setActiveTab] = useState<'single' | 'bulk' | 'group'>('single');
     const [email, setEmail] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     const [importReport, setImportReport] = useState<any>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [groups, setGroups] = useState<any[]>([]);
+    const [groupsLoading, setGroupsLoading] = useState(false);
+    const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+
+    // Load groups when group tab is active
+    useEffect(() => {
+        if (isOpen && activeTab === 'group' && groups.length === 0) {
+            setGroupsLoading(true);
+            TeacherService.getGroups()
+                .then(data => setGroups(data))
+                .catch(() => toastError('Failed to load groups'))
+                .finally(() => setGroupsLoading(false));
+        }
+    }, [isOpen, activeTab]);
 
     if (!isOpen) return null;
 
@@ -196,6 +210,13 @@ export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId
                             <Upload size={14} />
                             Bulk Enroll
                         </button>
+                        <button
+                            onClick={() => setActiveTab('group')}
+                            className={`flex-1 flex items-center justify-center gap-2 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'group' ? 'bg-white text-[var(--brand)] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            <Users size={14} />
+                            By Group
+                        </button>
                     </div>
                 </div>
 
@@ -210,7 +231,7 @@ export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId
                         </div>
                     ) : (
                         <div className="min-h-[220px]">
-                            {activeTab === 'single' ? (
+                            {activeTab === 'single' && (
                                 <form onSubmit={handleSingleEnroll} className="space-y-6">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Student Email Address</label>
@@ -236,7 +257,8 @@ export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId
                                         ) : "Enroll Student"}
                                     </button>
                                 </form>
-                            ) : (
+                            )}
+                            {activeTab === 'bulk' && (
                                 <div className="space-y-6">
                                     <div
                                         onClick={() => fileInputRef.current?.click()}
@@ -277,6 +299,87 @@ export default function EnrollmentModal({ isOpen, onClose, courseTitle, courseId
                                             <AlertCircle size={18} />
                                             <p className="text-xs font-bold">{error}</p>
                                         </div>
+                                    )}
+                                </div>
+                            )}
+                            {activeTab === 'group' && (
+                                <div className="space-y-6">
+                                    {groupsLoading ? (
+                                        <div className="py-12 flex items-center justify-center">
+                                            <Loader2 size={24} className="animate-spin text-slate-300" />
+                                        </div>
+                                    ) : groups.length === 0 ? (
+                                        <div className="py-10 text-center">
+                                            <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-4">
+                                                <Users size={24} className="text-slate-300" />
+                                            </div>
+                                            <p className="text-sm font-black text-slate-700 mb-1">No Groups Yet</p>
+                                            <p className="text-xs font-bold text-slate-400">Create groups first in the Students &amp; Groups page.</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Select a Group</label>
+                                                <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                                    {groups.map(g => (
+                                                        <button
+                                                            key={g.id}
+                                                            onClick={() => setSelectedGroupId(g.id)}
+                                                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all ${
+                                                                selectedGroupId === g.id
+                                                                    ? 'bg-[var(--brand-light)] border-[var(--brand)] text-[var(--brand-dark)]'
+                                                                    : 'bg-slate-50 border-slate-100 hover:border-slate-200 text-slate-700'
+                                                            }`}
+                                                        >
+                                                            <span className="text-sm font-black">{g.name}</span>
+                                                            <span className="text-[10px] font-black uppercase tracking-widest opacity-60">
+                                                                {g._count?.students || g.students?.length || 0} students
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    if (!selectedGroupId) return;
+                                                    setIsProcessing(true);
+                                                    setError(null);
+                                                    try {
+                                                        const result = await TeacherService.enrollGroupInCourse(courseId, selectedGroupId);
+                                                        setSuccess(true);
+                                                        const enrolledCount = result?.enrolledCount || result?.summary?.enrolled || 0;
+                                                        toastSuccess(`Group enrolled — ${enrolledCount} student(s) added`);
+                                                        onEnroll([]);
+                                                        setTimeout(() => {
+                                                            setSuccess(false);
+                                                            setSelectedGroupId('');
+                                                            onClose();
+                                                        }, 2000);
+                                                    } catch (err: any) {
+                                                        const msg = err?.message || 'Failed to enroll group';
+                                                        setError(msg);
+                                                        toastError(msg);
+                                                    } finally {
+                                                        setIsProcessing(false);
+                                                    }
+                                                }}
+                                                disabled={isProcessing || !selectedGroupId}
+                                                className="w-full py-4 bg-[var(--brand)] text-white font-black text-sm rounded-2xl shadow-lg shadow-[var(--brand)]/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100"
+                                            >
+                                                {isProcessing ? (
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Loader2 size={18} className="animate-spin" />
+                                                        Enrolling Group...
+                                                    </div>
+                                                ) : "Enroll Entire Group"}
+                                            </button>
+                                            {error && (
+                                                <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl flex items-center gap-3 animate-shake">
+                                                    <AlertCircle size={18} />
+                                                    <p className="text-xs font-bold">{error}</p>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             )}

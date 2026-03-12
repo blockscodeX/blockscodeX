@@ -20,6 +20,7 @@ import { CourseModule } from './modules/course/course.module';
 import { CodeExecutionModule } from './modules/code-execution/code-execution.module';
 import { BullModule } from '@nestjs/bullmq';
 import { AiModule } from './modules/ai/ai.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -94,7 +95,8 @@ import { AiModule } from './modules/ai/ai.module';
     StudentModule,
     OrganizationModule,
     CodeExecutionModule,
-    AiModule
+    AiModule,
+    NotificationModule
   ],
   controllers: [AppController],
   providers: [

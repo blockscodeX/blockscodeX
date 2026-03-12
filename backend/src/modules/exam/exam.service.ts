@@ -510,6 +510,23 @@ export class ExamService {
                     });
                 }
 
+                // Merge Redis-cached answers with DB answers for fast restore
+                // Redis may have answers that BullMQ hasn't persisted yet
+                try {
+                    const redisKey = `session:answers:${existing.id}`;
+                    const cachedAnswers = await this.redis.get(redisKey);
+                    if (cachedAnswers) {
+                        const dbAnswers = typeof existing.answers === 'string'
+                            ? JSON.parse(existing.answers)
+                            : (existing.answers || {});
+                        const redisAnswers = JSON.parse(cachedAnswers);
+                        // Merge: Redis answers take priority (they're more recent)
+                        (existing as any).answers = { ...dbAnswers, ...redisAnswers };
+                    }
+                } catch (e) {
+                    console.error('[ExamService] Redis answer merge failed, using DB answers:', e);
+                }
+
                 // CHECK FEEDBACK STATUS
                 const feedbackRecord = await this.prisma.feedback.findFirst({
                     where: { userId, examId }

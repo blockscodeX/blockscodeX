@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import { BRAND } from "../constants/brand";
@@ -7,7 +8,8 @@ import { siteConfig } from "@/app/config/site";
 import ImpersonationBanner from "./Common/ImpersonationBanner";
 import { AuthService } from "@/services/api/AuthService";
 import { useOrganization } from "../context/OrganizationContext";
-import { Lock } from "lucide-react";
+import { Lock, Megaphone, X, FileText, ImageIcon, File as FileIcon, Download } from "lucide-react";
+import { StudentService } from "@/services/api/StudentService";
 
 export interface ExamConfig {
   rollNumber?: string;
@@ -273,6 +275,11 @@ export default function Navbar({ basePath, userRole: roleOverride, examConfig }:
 
           {/* Right - User Actions */}
           <div className="flex items-center gap-5">
+            {/* Announcement Bell - Student only */}
+            {!examConfig && !mustChangePassword && role === 'student' && (
+              <AnnouncementBell />
+            )}
+
             {!examConfig && !mustChangePassword && (
               <div className="relative group/playground">
                 <button
@@ -491,5 +498,187 @@ function MenuBtn({ icon, label, onClick, danger }: { icon: any; label: string; o
       {icon}
       {label}
     </button>
+  );
+}
+
+// ─── ANNOUNCEMENT BELL (Student Navbar) ────────────────────────────────
+
+function AnnouncementBell() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedAnn, setSelectedAnn] = useState<any>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function close(e: any) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const load = async () => {
+    try {
+      const [ann, count] = await Promise.all([
+        StudentService.getAnnouncements(true),
+        StudentService.getUnreadAnnouncementCount()
+      ]);
+      setAnnouncements(ann);
+      setUnreadCount(count.count || 0);
+    } catch { /* silent */ }
+  };
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 30000); // poll every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleClick = async (ann: any) => {
+    setSelectedAnn(ann);
+    setOpen(false);
+    if (!ann.isRead) {
+      try {
+        await StudentService.markAnnouncementRead(ann.id);
+        setUnreadCount(prev => Math.max(prev - 1, 0));
+        setAnnouncements(prev => prev.map(a => a.id === ann.id ? { ...a, isRead: true } : a));
+      } catch { /* silent */ }
+    }
+  };
+
+  const handleDownload = (url: string, name: string) => {
+    const proxyUrl = `/api/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name || 'download')}`;
+    window.open(proxyUrl, '_self');
+  };
+
+  return (
+    <>
+      <div ref={ref} className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          className="hidden sm:flex w-10 h-10 rounded-xl border border-slate-100 items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-[var(--brand)] transition-all relative"
+          title="Announcements"
+        >
+          <Megaphone size={18} />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[18px] bg-rose-500 text-white text-[8px] font-black rounded-full flex items-center justify-center shadow-lg shadow-rose-500/30 px-1">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+
+        {open && (
+          <div className="absolute right-0 top-full mt-3 w-80 rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200/60 z-50 animate-fade-in overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
+                <Megaphone size={14} className="text-[var(--brand)]" /> Announcements
+              </h3>
+              {unreadCount > 0 && (
+                <span className="text-[9px] font-black text-[var(--brand)] bg-[var(--brand-light)] px-2 py-0.5 rounded-lg uppercase">
+                  {unreadCount} new
+                </span>
+              )}
+            </div>
+            <div className="max-h-[340px] overflow-y-auto custom-scrollbar">
+              {announcements.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Megaphone size={24} className="text-slate-200 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-400">No announcements yet</p>
+                </div>
+              ) : (
+                announcements.slice(0, 8).map(ann => (
+                  <button
+                    key={ann.id}
+                    onClick={() => handleClick(ann)}
+                    className={`w-full text-left px-5 py-3.5 hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0 flex items-start gap-3 ${
+                      !ann.isRead ? 'bg-[var(--brand-light)]/20' : ''
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      ann.isRead ? 'bg-slate-100 text-slate-400' : 'bg-[var(--brand)] text-white'
+                    }`}>
+                      <Megaphone size={12} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[13px] font-bold truncate ${ann.isRead ? 'text-slate-600' : 'text-slate-800'}`}>{ann.title}</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                        {new Date(ann.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        {ann.teacher?.name && ` · ${ann.teacher.name}`}
+                      </p>
+                    </div>
+                    {!ann.isRead && <div className="w-2 h-2 rounded-full bg-[var(--brand)] flex-shrink-0 mt-2" />}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Full Announcement Popup - Portal to escape backdrop-blur containing block */}
+      {selectedAnn && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setSelectedAnn(null)} />
+          <div className="bg-white w-full max-w-2xl rounded-[48px] p-12 shadow-2xl relative z-10 animate-in slide-in-from-bottom-8 duration-500 max-h-[85vh] overflow-y-auto custom-scrollbar">
+            <button
+              onClick={() => setSelectedAnn(null)}
+              className="absolute top-10 right-10 w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-50 hover:bg-slate-100 text-slate-400 transition-all hover:scale-110 active:scale-95"
+            >
+              <X size={20} strokeWidth={3} />
+            </button>
+
+            <div className="flex items-start gap-5 mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--brand)] to-[var(--brand-dark)] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[var(--brand)]/20">
+                <Megaphone size={24} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-1">{selectedAnn.title}</h2>
+                <div className="flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <span>{new Date(selectedAnn.createdAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</span>
+                  {selectedAnn.teacher?.name && (
+                    <><span className="w-1 h-1 bg-slate-300 rounded-full" /><span>{selectedAnn.teacher.name}</span></>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {selectedAnn.groups && selectedAnn.groups.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-6">
+                {selectedAnn.groups.map((g: any) => (
+                  <span key={g.id} className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-[var(--brand-light)] text-[var(--brand-dark)] border border-[var(--brand-light)]">{g.name}</span>
+                ))}
+              </div>
+            )}
+
+            <div
+              className="prose prose-sm max-w-none text-slate-700 mb-8 [&_p]:mb-3 [&_h1]:text-xl [&_h1]:font-black [&_h2]:text-lg [&_h2]:font-black [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-4 [&_a]:text-[var(--brand)] [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-[var(--brand-light)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_img]:rounded-2xl [&_img]:max-w-full"
+              dangerouslySetInnerHTML={{ __html: selectedAnn.content }}
+            />
+
+            {Array.isArray(selectedAnn.attachments) && selectedAnn.attachments.length > 0 && (
+              <div className="bg-slate-50 rounded-[24px] border border-slate-100 p-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Attachments</p>
+                <div className="space-y-2">
+                  {selectedAnn.attachments.map((att: any, idx: number) => (
+                    <button key={idx} onClick={() => handleDownload(att.url, att.name)}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-white rounded-2xl border border-slate-100 hover:border-[var(--brand-light)] hover:shadow-sm transition-all cursor-pointer">
+                      <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center">
+                        {att.type?.startsWith("image/") ? <ImageIcon size={16} className="text-blue-500" /> : att.type?.includes("pdf") ? <FileText size={16} className="text-rose-500" /> : <FileIcon size={16} className="text-slate-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-xs font-black text-slate-700 truncate">{att.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400">{att.size ? `${(att.size / 1024).toFixed(0)} KB` : "File"}</p>
+                      </div>
+                      <span className="flex items-center gap-1 text-[10px] font-black text-[var(--brand)] uppercase tracking-widest"><Download size={12} /> Download</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }

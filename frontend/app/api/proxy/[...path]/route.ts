@@ -39,6 +39,12 @@ async function handleRequest(request: NextRequest, params: Promise<{ path: strin
         headers['Content-Type'] = contentType;
     }
 
+    // Forward custom headers needed by specific endpoints
+    const fileSize = request.headers.get('x-file-size');
+    if (fileSize) {
+        headers['x-file-size'] = fileSize;
+    }
+
     if (token) {
         headers['Authorization'] = `Bearer ${token}`; // For strategies checking Bearer
         headers['Cookie'] = `auth_token=${token}`;    // For strategies checking Cookie (redundancy)
