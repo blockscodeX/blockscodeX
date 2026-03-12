@@ -86,6 +86,9 @@ export default function ExamLoginPage() {
         setLoading(true);
         setError('');
         try {
+            // Clear any stale token before new exam login
+            localStorage.removeItem('auth_token');
+
             // Secure Server Action - Sets HttpOnly Cookie
             const result = await examLoginAction(email, testCode, password, slugFromQuery);
 
@@ -95,9 +98,12 @@ export default function ExamLoginPage() {
 
             const data = result; // maintain structure
 
-            // Store user object for client-side context (ExamPage checks this)
+            // Store user + token for client-side context (ExamPage + WebSocket auth)
             if (data.user) {
                 localStorage.setItem('user', JSON.stringify(data.user));
+            }
+            if (data.access_token) {
+                localStorage.setItem('auth_token', data.access_token);
             }
 
             const targetSlug = data.exam?.slug || slugFromQuery;

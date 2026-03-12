@@ -129,6 +129,15 @@ export const useExamSocket = (
         if (isKicked.current) return;
         if (!examIdRef.current || !userIdRef.current) return;
 
+        if (typeof window !== 'undefined') {
+            const examAuthKey = `exam_${examIdRef.current}_auth`;
+            if (!localStorage.getItem(examAuthKey)) {
+                console.warn('[Socket] Exam auth marker missing. Redirecting to exam login.');
+                redirectToLogin('exam_auth_required');
+                return;
+            }
+        }
+
         // Tear down any existing socket first
         if (socketRef.current) {
             socketRef.current.removeAllListeners();

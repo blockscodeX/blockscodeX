@@ -246,7 +246,13 @@ export const StudentService = {
 
         try {
             const res = await authFetch('/student/announcements');
-            if (!res.ok) throw new Error('Failed to fetch announcements');
+            if (!res.ok) {
+                if (res.status === 401 || res.status === 403) {
+                    // Exam sessions may not have dashboard auth; return empty list.
+                    return [];
+                }
+                throw new Error('Failed to fetch announcements');
+            }
             const data = await res.json();
             cache.set(cacheKey, data);
             return data;
@@ -259,7 +265,12 @@ export const StudentService = {
     async getUnreadAnnouncementCount() {
         try {
             const res = await authFetch('/student/announcements/unread-count');
-            if (!res.ok) throw new Error('Failed to fetch unread count');
+            if (!res.ok) {
+                if (res.status === 401 || res.status === 403) {
+                    return { count: 0 };
+                }
+                throw new Error('Failed to fetch unread count');
+            }
             return await res.json();
         } catch (error) {
             console.error('[StudentService] Error', error);
