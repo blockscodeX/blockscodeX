@@ -116,7 +116,7 @@ export default function PublicExamPage() {
     // ===== ALL HOOKS MUST BE CALLED UNCONDITIONALLY BEFORE ANY EARLY RETURNS =====
 
     // Socket Integration (must be called before early return)
-    const { socket, saveAnswer, logViolation: socketLogViolation, saveReviewStatus, disconnect, isConnected, missedHeartbeats } = useExamSocket(
+    const { socket, saveAnswer, logViolation: socketLogViolation, saveReviewStatus, disconnect, retryConnection, isConnected, connectionStatus, missedHeartbeats } = useExamSocket(
         examId,
         socketUserId,
         sessionId || '',
@@ -1233,6 +1233,7 @@ export default function PublicExamPage() {
     };
 
     // ===== EARLY RETURN AFTER ALL HOOKS =====
+
     // Render simple error message if exam not found
     if (isNotFound) {
         return (
@@ -1254,7 +1255,51 @@ export default function PublicExamPage() {
         );
     }
 
-    if (isLoading && sections.length === 0) {
+    // Block the exam UI if the socket has not yet connected.
+    // Feedback / success routes don't need the live socket so they bypass this.
+    const socketPending = connectionStatus === 'connecting' && !isFeedbackMode && !isSuccessMode;
+    const socketFailed  = connectionStatus === 'failed'    && !isFeedbackMode && !isSuccessMode;
+
+    // Show error wall when all socket retries are exhausted before first connect
+    if (socketFailed) {
+        return (
+            <div className="h-screen w-full bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+                <div className="max-w-md w-full text-center space-y-6">
+                    <div className="text-6xl mb-2">📡</div>
+                    <h1 className="text-2xl font-bold text-white">Cannot Connect to Exam</h1>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                        The exam requires a live connection to the server for answer saving and proctoring.
+                        We couldn&apos;t establish that connection — this is usually a network issue.
+                    </p>
+                    <div className="bg-slate-700/50 rounded-lg p-4 text-left space-y-1">
+                        <p className="text-slate-300 text-xs font-semibold uppercase tracking-wider">Try the following</p>
+                        <ul className="text-slate-400 text-sm space-y-1 list-disc list-inside">
+                            <li>Check your internet connection</li>
+                            <li>Disable a VPN if active</li>
+                            <li>Try a different network (hotspot)</li>
+                        </ul>
+                    </div>
+                    <div className="flex gap-3 justify-center pt-2">
+                        <button
+                            onClick={retryConnection}
+                            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition"
+                        >
+                            Retry Connection
+                        </button>
+                        <button
+                            onClick={() => router.push(`/exam/login?slug=${examId}`)}
+                            className="px-6 py-3 bg-slate-600 hover:bg-slate-500 text-white font-semibold rounded-lg transition"
+                        >
+                            Back to Login
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show skeleton while exam data is loading OR while socket is still connecting
+    if ((isLoading && sections.length === 0) || socketPending) {
         return <CoursePlayerSkeleton hasSidebar={true} isExamMode={true} />;
     }
 

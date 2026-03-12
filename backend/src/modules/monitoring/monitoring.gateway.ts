@@ -18,6 +18,12 @@ import { WsException } from '@nestjs/websockets';
 
 @WebSocketGateway({
     namespace: 'proctoring',
+    // Keep connections alive through production reverse-proxies (nginx default
+    // idle timeout is 60s). pingInterval must be shorter than proxy timeout.
+    pingInterval: 20000,   // server sends ping every 20s
+    pingTimeout: 40000,    // allow 40s for pong before closing
+    // Upgrade from long-polling to websocket is fine, but lock it once upgraded
+    transports: ['websocket', 'polling'],
     cors: {
         origin: [
             'http://localhost:3000',
@@ -83,13 +89,16 @@ export class MonitoringGateway
             if (!token) throw new Error('No token provided');
 
             const payload = this.jwtService.verify(token);
-            // Optionally store the verified userId mapping:
-            // client.data.userId = payload.sub;
+            client.data.userId = payload.sub;
 
             console.log(`Client connected and authenticated: ${client.id}`);
         } catch (error) {
             console.log(`Client connection rejected (unauthorized): ${client.id}`, error);
-            client.disconnect(true);
+            // Emit auth_error FIRST so the client knows WHY it's being disconnected
+            // and can decide whether to retry (stale token) or redirect to login.
+            client.emit('auth_error', { message: 'AUTH_FAILED' });
+            // Small delay so the event is flushed before the transport closes
+            setTimeout(() => client.disconnect(true), 100);
         }
     }
 
