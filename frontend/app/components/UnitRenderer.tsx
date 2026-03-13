@@ -352,14 +352,14 @@ export function UnitRendererComponent({
         switch (question.type) {
             case 'MCQ':
             case 'MultiSelect':
-                const correctCount = question.mcqOptions?.filter(o => o.isCorrect).length || 0;
-                const maxSelections = question.type === 'MultiSelect' ? (correctCount > 0 ? correctCount : undefined) : 1;
+                const correctOptionIds = (question.mcqOptions || []).filter(o => o.isCorrect).map(o => o.id);
                 return (
                     <MCQOptions
                         key={`mcq-${question.id}`}
                         options={question.mcqOptions || []}
                         multiSelect={question.type === 'MultiSelect'}
-                        maxSelections={maxSelections}
+                        maxSelections={question.type === 'MCQ' ? 1 : undefined}
+                        correctIds={correctOptionIds}
                         selectedIds={hasAttemptSelected ? attemptAnswer : currentAnswer}
                         onSubmit={onSubmit || ((ids) => console.log('Submitted MCQ:', ids))}
                         onChange={onAnswerChange}

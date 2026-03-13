@@ -10,6 +10,7 @@ interface MCQOptionsProps {
     options: MCQOption[];
     multiSelect?: boolean;
     maxSelections?: number;
+    correctIds?: string[];
     onSubmit: (selectedIds: string[]) => void;
     onChange?: (selectedIds: string[]) => void;
     onReset: () => void;
@@ -22,6 +23,7 @@ export default function MCQOptions({
     options,
     multiSelect = false,
     maxSelections,
+    correctIds,
     onSubmit,
     onChange,
     onReset,
@@ -34,6 +36,7 @@ export default function MCQOptions({
     // Ensure selectedIds is always an array
     const rawSelectedIds = externalSelectedIds !== undefined ? externalSelectedIds : internalSelectedIds;
     const selectedIds = Array.isArray(rawSelectedIds) ? rawSelectedIds : (rawSelectedIds ? [rawSelectedIds] : []);
+    const normalizedCorrectIds = Array.isArray(correctIds) ? correctIds : [];
     
     const isInteractionDisabled = readOnly;
 
@@ -81,6 +84,7 @@ export default function MCQOptions({
 
                     {options.map((option) => {
                         const isSelected = selectedIds.includes(option.id);
+                        const isCorrect = normalizedCorrectIds.includes(option.id);
                         return (
                             <button
                                 key={option.id}
@@ -88,8 +92,10 @@ export default function MCQOptions({
                                 disabled={isInteractionDisabled}
                                 className={`w-full text-left p-6 rounded-2xl border-2 transition-all group relative overflow-hidden ${isSelected
                                     ? 'border-[var(--brand)] bg-[var(--brand-lighter)] ring-1 ring-[var(--brand)]'
-                                    : 'border-slate-100' + (!isInteractionDisabled ? ' hover:border-slate-200 hover:bg-slate-50' : '')
-                                    } ${isInteractionDisabled && !isSelected ? 'opacity-50 grayscale-[0.5]' : ''}`}
+                                    : (readOnly && isCorrect)
+                                        ? 'border-emerald-300 bg-emerald-50'
+                                        : 'border-slate-100' + (!isInteractionDisabled ? ' hover:border-slate-200 hover:bg-slate-50' : '')
+                                        } ${isInteractionDisabled && !isSelected && !isCorrect ? 'opacity-50 grayscale-[0.5]' : ''}`}
                             >
                                 <div className="flex items-start gap-4 z-10 relative">
                                     <div className={`w-6 h-6 rounded-${multiSelect ? 'md' : 'full'} border-2 flex items-center justify-center shrink-0 transition-colors ${isSelected
@@ -110,6 +116,9 @@ export default function MCQOptions({
                                     >
                                         {option.text}
                                     </span>
+                                    {readOnly && isCorrect && (
+                                        <span className="ml-auto text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5">Correct</span>
+                                    )}
                                 </div>
                             </button>
                         );

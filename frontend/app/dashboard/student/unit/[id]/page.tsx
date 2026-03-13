@@ -188,9 +188,32 @@ export default function StudentUnitPage({ params: paramsPromise }: { params: Pro
                 content = { completed: true };
             }
 
+            const normalizedContent = (() => {
+                if (currentQuestion.type === 'MCQ' || currentQuestion.type === 'MultiSelect') {
+                    return Array.isArray(content) ? content : (content != null ? [content] : []);
+                }
+
+                if (currentQuestion.type === 'Coding') {
+                    if (typeof data === 'object' && data !== null) {
+                        return {
+                            ...data,
+                            code: data.code ?? content,
+                            testCases: data.testCases ?? testCases,
+                        };
+                    }
+                    return { code: content, testCases };
+                }
+
+                if (currentQuestion.type === 'Web' || currentQuestion.type === 'Notebook' || currentQuestion.type === 'Reading') {
+                    return content;
+                }
+
+                return content;
+            })();
+
             await StudentService.submitUnit(id, {
                 status: status,
-                content: { code: content, testCases },
+                content: normalizedContent,
                 score: score,
                 ...(testCases ? { testCases } : {})
             } as any);

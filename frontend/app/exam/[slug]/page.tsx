@@ -423,13 +423,31 @@ export default function PublicExamPage() {
                     // This handles: refresh on same device AND resume on new device
                     for (const [qId, ans] of Object.entries(restoredAllAnswers)) {
                         if (qId.startsWith('_')) continue; // Skip internal markers
-                        if (ans && typeof ans === 'object' && ans.code && typeof ans.code === 'string') {
-                            // This is a coding answer with {code, languageId, results}
-                            const langId = ans.languageId || 'default';
-                            const key = `unit_progress_${qId}_${langId}`;
-                            // Only populate if localStorage doesn't already have a more recent value
-                            if (!localStorage.getItem(key)) {
-                                localStorage.setItem(key, ans.code);
+                        if (ans && typeof ans === 'object') {
+                            const languageEntries: Array<{ langId: string; code: string }> = [];
+
+                            if ((ans as any).code && typeof (ans as any).code === 'string') {
+                                languageEntries.push({
+                                    langId: (ans as any).languageId || 'default',
+                                    code: (ans as any).code,
+                                });
+                            }
+
+                            const languageSubmissions = (ans as any).languageSubmissions;
+                            if (languageSubmissions && typeof languageSubmissions === 'object') {
+                                for (const [langId, langAnswer] of Object.entries(languageSubmissions as Record<string, any>)) {
+                                    if (langAnswer && typeof langAnswer === 'object' && typeof (langAnswer as any).code === 'string') {
+                                        languageEntries.push({ langId, code: (langAnswer as any).code });
+                                    }
+                                }
+                            }
+
+                            for (const entry of languageEntries) {
+                                const key = `unit_progress_${qId}_${entry.langId}`;
+                                // Only populate if localStorage doesn't already have a more recent value
+                                if (!localStorage.getItem(key)) {
+                                    localStorage.setItem(key, entry.code);
+                                }
                             }
                         }
                     }
@@ -697,12 +715,15 @@ export default function PublicExamPage() {
     };
 
     const handleSubmitNext = (answer: any) => {
+        const nextAnswers = {
+            ...userAnswersRef.current,
+            [currentQuestionId as string]: answer,
+            [`_submitted_${currentQuestionId}`]: true
+        };
+
         // 1. Save Answer
-        setUserAnswers(prev => ({
-            ...prev,
-            [currentQuestionId]: answer,
-            [`_submitted_${currentQuestionId}`]: true // Mark as explicitly submitted
-        }));
+        userAnswersRef.current = nextAnswers;
+        setUserAnswers(nextAnswers);
         saveAnswer(currentQuestionId as string, answer);
         // Also save the submitted flag
         saveAnswer(`_submitted_${currentQuestionId}`, true);
@@ -742,7 +763,9 @@ export default function PublicExamPage() {
             return;
         }
 
-        setUserAnswers(prev => ({ ...prev, [currentQuestionId]: answer }));
+        const nextAnswers = { ...userAnswersRef.current, [currentQuestionId as string]: answer };
+        userAnswersRef.current = nextAnswers;
+        setUserAnswers(nextAnswers);
 
         // Debounce Save (1s)
         if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
@@ -1027,10 +1050,11 @@ export default function PublicExamPage() {
 
             // Gather answers for this section
             const sectionQuestions = sections.find(s => s.id === sectionId)?.questions.map((q: any) => q.id) || [];
-            const sectionAnswers = Object.keys(userAnswers)
+            const latestAnswers = userAnswersRef.current;
+            const sectionAnswers = Object.keys(latestAnswers)
                 .filter(key => sectionQuestions.includes(key))
                 .reduce((obj, key) => {
-                    obj[key] = userAnswers[key];
+                    obj[key] = latestAnswers[key];
                     return obj;
                 }, {} as any);
 

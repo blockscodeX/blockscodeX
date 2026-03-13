@@ -65,42 +65,102 @@ export default function CodingQuestionRenderer({
     // Find base language config and overlay template head/body/footer
     const baseLang = PLAYGROUND_LANGUAGES.find(l => l.id === activeLangId) || PLAYGROUND_LANGUAGES[0];
 
+    const parseAnswer = (ans: any) => {
+        if (typeof ans === 'string') return ans;
+        if (ans && typeof ans === 'object' && typeof ans.code === 'string') return ans.code;
+        return null;
+    };
+
+    const getLanguageSubmissions = (ans: any): Record<string, any> => {
+        if (!ans || typeof ans !== 'object') return {};
+        const map = ans.languageSubmissions;
+        return (map && typeof map === 'object') ? map : {};
+    };
+
+    const getLanguageAnswer = (ans: any, langId: string): any => {
+        if (!ans) return null;
+        if (typeof ans === 'string') return { code: ans };
+
+        const byLang = getLanguageSubmissions(ans);
+        if (byLang[langId] && typeof byLang[langId] === 'object') {
+            return byLang[langId];
+        }
+
+        if (ans.languageId === langId) {
+            return ans;
+        }
+
+        return null;
+    };
+
+    const buildMergedCodingAnswer = (baseAnswer: any, langId: string, nextLangAnswer: any) => {
+        const base = (baseAnswer && typeof baseAnswer === 'object') ? baseAnswer : {};
+        const existingByLang = getLanguageSubmissions(baseAnswer);
+
+        return {
+            ...base,
+            ...nextLangAnswer,
+            languageId: langId,
+            code: nextLangAnswer?.code,
+            results: nextLangAnswer?.results,
+            languageSubmissions: {
+                ...existingByLang,
+                [langId]: {
+                    ...(existingByLang[langId] || {}),
+                    ...nextLangAnswer,
+                    languageId: langId,
+                }
+            }
+        };
+    };
+
     // Persistence Logic
     const [mounted, setMounted] = useState(false);
-    
+
     // On mount, sync localStorage from currentAnswer if localStorage is empty
     // This handles the case where user opens exam on a new device
     useEffect(() => {
         setMounted(true);
-        
-        // Restore from currentAnswer if localStorage is empty
+
         if (typeof window !== 'undefined' && currentAnswer && !hasAttemptSelected) {
-            const parsed = parseAnswer(currentAnswer);
-            const answerLangId = currentAnswer?.languageId;
-            
-            // If currentAnswer has code, sync it to localStorage
-            if (parsed && typeof parsed === 'string' && parsed.length > 0) {
-                // Determine which language this answer belongs to
-                const targetLangId = answerLangId || question.codingConfig?.languageId || activeLangId;
-                const key = `unit_progress_${question.id}_${targetLangId}`;
-                
-                // Only populate if localStorage doesn't already have a value
+            const languageEntries: Array<{ langId: string; code: string }> = [];
+
+            const legacyParsed = parseAnswer(currentAnswer);
+            if (legacyParsed && typeof legacyParsed === 'string') {
+                languageEntries.push({
+                    langId: currentAnswer?.languageId || question.codingConfig?.languageId || activeLangId,
+                    code: legacyParsed
+                });
+            }
+
+            const byLang = getLanguageSubmissions(currentAnswer);
+            for (const [langId, langAns] of Object.entries(byLang)) {
+                const parsed = parseAnswer(langAns);
+                if (parsed && typeof parsed === 'string') {
+                    languageEntries.push({ langId, code: parsed });
+                }
+            }
+
+            for (const entry of languageEntries) {
+                const key = `unit_progress_${question.id}_${entry.langId}`;
                 if (!localStorage.getItem(key)) {
-                    localStorage.setItem(key, parsed);
+                    localStorage.setItem(key, entry.code);
                 }
             }
         }
     }, [question.id]); // Only run once per question
 
-    // Restore execution results from saved answer
+    // Restore execution results from saved answer (language-specific)
     useEffect(() => {
         const answer = hasAttemptSelected ? attemptAnswer : currentAnswer;
-        if (answer && typeof answer === 'object' && Array.isArray(answer.results)) {
-            setExecutionResults(answer.results);
+        const langAnswer = getLanguageAnswer(answer, activeLangId) || answer;
+
+        if (langAnswer && typeof langAnswer === 'object' && Array.isArray(langAnswer.results)) {
+            setExecutionResults(langAnswer.results);
         } else {
             setExecutionResults([]);
         }
-    }, [hasAttemptSelected, attemptAnswer, currentAnswer, question.id, setExecutionResults]);
+    }, [hasAttemptSelected, attemptAnswer, currentAnswer, activeLangId, question.id, setExecutionResults]);
 
     const getSavedCode = () => {
         if (typeof window === 'undefined') return null;
@@ -115,12 +175,12 @@ export default function CodingQuestionRenderer({
             localStorage.setItem(key, newCode);
         }
         if (onAnswerChange) {
-            // Always include languageId so we know which language the code belongs to
-            onAnswerChange({
+            const mergedAnswer = buildMergedCodingAnswer(currentAnswer, activeLangId, {
                 code: newCode,
                 languageId: activeLangId,
                 results: executionResults && executionResults.length > 0 ? executionResults : undefined
             });
+            onAnswerChange(mergedAnswer);
         }
     };
 
@@ -138,35 +198,33 @@ export default function CodingQuestionRenderer({
         return template.initialCode ?? template.body ?? (isPrimary ? (question.codingConfig?.initialCode ?? question.codingConfig?.body) : undefined) ?? baseLang.initialBody;
     };
 
-    const parseAnswer = (ans: any) => {
-        if (typeof ans === 'string') return ans;
-        if (ans && ans.code) return ans.code;
-        return typeof ans === 'string' ? ans : null;
-    };
-
     const primaryLangId = question.codingConfig?.languageId;
     const isPrimary = activeLangId === primaryLangId;
 
     // Determine initialBody for the editor.
     // We need to handle: localStorage > currentAnswer (with matching language) > template > default
     const resolveInitialBody = () => {
-        if (hasAttemptSelected) return parseAnswer(attemptAnswer);
+        if (hasAttemptSelected) {
+            const langAttempt = getLanguageAnswer(attemptAnswer, activeLangId) || attemptAnswer;
+            const parsedAttempt = parseAnswer(langAttempt);
+            if (parsedAttempt) return parsedAttempt;
+        }
 
         // 1. Per-language localStorage (highest priority - user's latest edits)
         if (savedAnswer) return savedAnswer;
 
         // 2. Check currentAnswer from backend (if it matches current language)
         if (currentAnswer != null) {
+            const langAnswer = getLanguageAnswer(currentAnswer, activeLangId);
+            const parsedLangAnswer = parseAnswer(langAnswer);
+            if (parsedLangAnswer && parsedLangAnswer.length > 0) {
+                return parsedLangAnswer;
+            }
+
             const answerLangId = currentAnswer?.languageId;
-            const parsed = parseAnswer(currentAnswer);
-            
-            // Use currentAnswer if:
-            // - It has a languageId that matches current language, OR
-            // - It has no languageId but we're on primary language (backwards compatibility)
-            if (parsed && typeof parsed === 'string' && parsed.length > 0) {
-                if (answerLangId === activeLangId || (!answerLangId && isPrimary)) {
-                    return parsed;
-                }
+            const parsedCurrent = parseAnswer(currentAnswer);
+            if (parsedCurrent && parsedCurrent.length > 0 && (answerLangId === activeLangId || (!answerLangId && isPrimary))) {
+                return parsedCurrent;
             }
         }
 
@@ -395,16 +453,19 @@ export default function CodingQuestionRenderer({
                 ...result,
                 results: finalResults, // Use the fallback results if needed
                 code: code, // Save only the user's code (body), not the full concatenated code
+                languageId: activeLangId,
                 score: score,
                 testCases: `${finalPassed} / ${finalTotal}`
             };
 
+            const mergedSubmission = buildMergedCodingAnswer(currentAnswer, activeLangId, submissionData);
+
             // Optionally call parent onSubmit if needed, but we handled execution here
-            if (onSubmit) onSubmit(submissionData);
+            if (onSubmit) onSubmit(mergedSubmission);
 
             // Also update the answer state with the execution result so it can be saved
             if (onAnswerChange) {
-                onAnswerChange(submissionData);
+                onAnswerChange(mergedSubmission);
             }
 
             return { passed: result.status === 'Accepted', error: false };

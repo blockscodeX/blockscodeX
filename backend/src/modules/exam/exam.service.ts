@@ -729,7 +729,8 @@ export class ExamService {
                     const options = q.mcqOptions || q.options || [];
                     if (qType === 'MCQ') {
                         const correctOption = options.find((opt: any) => opt.isCorrect);
-                        if (correctOption && studentAnswer === correctOption.id) {
+                        const selectedId = Array.isArray(studentAnswer) ? studentAnswer[0] : studentAnswer;
+                        if (correctOption && selectedId === correctOption.id) {
                             score += Number(q.points) || 1;
                         }
                     } else {
