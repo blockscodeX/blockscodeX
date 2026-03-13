@@ -42,10 +42,29 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
     const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean, title: string, message: string, type?: 'danger' | 'warning' | 'info', onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
+    const getDraftKey = () => initialData?.id ? `exam_builder_draft_${initialData.id}` : 'exam_builder_draft_new';
+
+    // Persistence: Load from localStorage on mount
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const key = getDraftKey();
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    setExam(prev => ({ ...prev, ...parsed }));
+                    success("Restored exam draft from local storage", "Draft Restored");
+                } catch (e) {
+                    console.error("Failed to load exam draft", e);
+                }
+            }
+        }
+    }, []);
+
     // Persistence: Save to localStorage on change
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const key = exam.id ? `exam_builder_draft_${exam.id}` : 'exam_builder_draft_new';
+            const key = getDraftKey();
             const timeout = setTimeout(() => {
                 localStorage.setItem(key, JSON.stringify(exam));
             }, 1000); // Debounce 1s
@@ -243,6 +262,9 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                                 } else {
                                     const res = await TeacherService.createExam(exam, organizationId);
                                     setExam(prev => ({ ...prev, id: res.id }));
+                                    if (typeof window !== 'undefined') {
+                                        localStorage.removeItem('exam_builder_draft_new');
+                                    }
                                     success("Exam created successfully!", "Saved");
                                 }
                             } catch (e) {
