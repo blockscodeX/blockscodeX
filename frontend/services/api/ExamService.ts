@@ -51,14 +51,19 @@ export const ExamService = {
         try {
             const res = await fetch(`${BASE_URL}/exam/${slug}/public-status`);
 
-            // Explicitly handle 404 from Proxy/Backend
-            if (res.status === 404) {
-                const err = new Error('Exam not found');
-                (err as any).status = 404;
+            if (!res.ok) {
+                let errorMessage = 'Failed to fetch status';
+                const errorBody = await res.json().catch(() => null);
+                if (errorBody?.message && typeof errorBody.message === 'string') {
+                    errorMessage = errorBody.message;
+                }
+
+                const err = new Error(errorMessage);
+                (err as any).status = res.status;
                 throw err;
             }
 
-            if (!res.ok) throw new Error('Failed to fetch status');
+            // Explicitly handle 404 from Proxy/Backend
             return await res.json();
         } catch (error: any) {
             console.error('[ExamService] Failed to fetch public status', error);

@@ -45,6 +45,16 @@ async function handleRequest(request: NextRequest, params: Promise<{ path: strin
         headers['x-file-size'] = fileSize;
     }
 
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    if (forwardedFor) {
+        headers['x-forwarded-for'] = forwardedFor;
+    }
+
+    const realIp = request.headers.get('x-real-ip');
+    if (realIp) {
+        headers['x-real-ip'] = realIp;
+    }
+
     if (token) {
         headers['Authorization'] = `Bearer ${token}`; // For strategies checking Bearer
         headers['Cookie'] = `auth_token=${token}`;    // For strategies checking Cookie (redundancy)

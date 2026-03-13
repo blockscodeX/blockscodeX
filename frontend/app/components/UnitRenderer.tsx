@@ -420,6 +420,7 @@ export function UnitRendererComponent({
                         onChange={onAnswerChange}
                         onSubmit={onSubmit}
                         readOnly={hasAttemptSelected}
+                        isExamMode={isExamMode}
                     />
                 );
             // Reading case removed from here as it's handled at top level

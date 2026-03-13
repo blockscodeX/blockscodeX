@@ -54,12 +54,39 @@ export default function CodingQuestionRenderer({
     onCheatDetected
 }: CodingQuestionRendererProps) {
 
+    const normalizeLanguageId = (languageId?: string) => {
+        if (!languageId) return '';
+        const normalized = languageId.toLowerCase();
+        if (normalized === 'c++' || normalized === 'cplusplus' || normalized === 'cxx') return 'cpp';
+        if (normalized === 'js') return 'javascript';
+        if (normalized === 'py') return 'python';
+        return normalized;
+    };
+
     // Templates & allowed languages may come from the question (teacher config)
-    const codingTemplates = question.codingConfig?.templates || {};
-    const allowedLangs = question.codingConfig?.allowedLanguages || Object.keys(codingTemplates) || [];
+    const rawTemplates = question.codingConfig?.templates || {};
+    const codingTemplates = Object.entries(rawTemplates).reduce((acc, [langId, template]: [string, any]) => {
+        const normalizedId = normalizeLanguageId(langId);
+        acc[normalizedId] = template;
+        return acc;
+    }, {} as Record<string, any>);
+
+    const templateLangs = Object.keys(codingTemplates);
+    const configuredAllowed = Array.isArray(question.codingConfig?.allowedLanguages)
+        ? question.codingConfig.allowedLanguages.map((lang: string) => normalizeLanguageId(lang)).filter(Boolean)
+        : [];
+
+    const allowedLangs = configuredAllowed.length > 0
+        ? Array.from(new Set([
+            ...configuredAllowed.filter((langId: string) => templateLangs.includes(langId)),
+            ...templateLangs,
+        ]))
+        : (templateLangs.length > 0 ? templateLangs : PLAYGROUND_LANGUAGES.map(l => l.id));
 
     // Determine selected language (state kept in selectedCodingLang)
-    const activeLangId = selectedCodingLang || (question.codingConfig?.languageId) || (allowedLangs.length ? allowedLangs[0] : PLAYGROUND_LANGUAGES[0].id);
+    const activeLangId = normalizeLanguageId(selectedCodingLang || undefined)
+        || normalizeLanguageId(question.codingConfig?.languageId)
+        || (allowedLangs.length ? allowedLangs[0] : PLAYGROUND_LANGUAGES[0].id);
     const template = (codingTemplates as any)[activeLangId] || {};
 
     // Find base language config and overlay template head/body/footer
@@ -81,12 +108,17 @@ export default function CodingQuestionRenderer({
         if (!ans) return null;
         if (typeof ans === 'string') return { code: ans };
 
+        const normalizedLangId = normalizeLanguageId(langId);
         const byLang = getLanguageSubmissions(ans);
+        if (byLang[normalizedLangId] && typeof byLang[normalizedLangId] === 'object') {
+            return byLang[normalizedLangId];
+        }
+
         if (byLang[langId] && typeof byLang[langId] === 'object') {
             return byLang[langId];
         }
 
-        if (ans.languageId === langId) {
+        if (normalizeLanguageId(ans.languageId) === normalizedLangId || ans.languageId === langId) {
             return ans;
         }
 
@@ -94,21 +126,22 @@ export default function CodingQuestionRenderer({
     };
 
     const buildMergedCodingAnswer = (baseAnswer: any, langId: string, nextLangAnswer: any) => {
+        const normalizedLangId = normalizeLanguageId(langId);
         const base = (baseAnswer && typeof baseAnswer === 'object') ? baseAnswer : {};
         const existingByLang = getLanguageSubmissions(baseAnswer);
 
         return {
             ...base,
             ...nextLangAnswer,
-            languageId: langId,
+            languageId: normalizedLangId,
             code: nextLangAnswer?.code,
             results: nextLangAnswer?.results,
             languageSubmissions: {
                 ...existingByLang,
-                [langId]: {
-                    ...(existingByLang[langId] || {}),
+                [normalizedLangId]: {
+                    ...(existingByLang[normalizedLangId] || {}),
                     ...nextLangAnswer,
-                    languageId: langId,
+                    languageId: normalizedLangId,
                 }
             }
         };
@@ -300,7 +333,7 @@ export default function CodingQuestionRenderer({
         <div className="flex items-center gap-3">
             <select
                 value={activeLangId}
-                onChange={(e) => onLanguageChange(e.target.value)}
+                onChange={(e) => onLanguageChange(normalizeLanguageId(e.target.value))}
                 className="bg-[#f8f9fa] border border-slate-200 rounded px-2 py-1 text-[11px] font-bold text-slate-600 outline-none hover:border-slate-300 transition-colors"
             >
                 {((allowedLangs && allowedLangs.length > 0) ? allowedLangs : PLAYGROUND_LANGUAGES.map(l => l.id)).map((lid: string) => {
@@ -508,6 +541,7 @@ export default function CodingQuestionRenderer({
                 } : {})
             }}
             hideSubmit={hideSubmit}
+            hideSnapshotButton={isExamMode}
         />
     );
 }

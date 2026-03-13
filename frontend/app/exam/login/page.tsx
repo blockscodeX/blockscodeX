@@ -167,14 +167,36 @@ export default function ExamLoginPage() {
                             <p className="text-slate-500 font-medium">Enter your details to access the exam</p>
                         </div>
 
-                        {error && (
-                            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-3 text-rose-600 text-sm font-bold animate-shake">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                                {error}
+                        {error === 'Network Not Allowed.' ? (
+                            <div className="bg-white rounded-2xl border border-rose-200 overflow-hidden shadow-sm">
+                                <div className="bg-rose-50 p-6 flex flex-col items-center justify-center border-b border-rose-100">
+                                    <div className="h-16 w-16 rounded-full bg-rose-100 flex items-center justify-center mb-4">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-rose-600"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-rose-700">Access Restricted</h2>
+                                </div>
+                                <div className="p-6 bg-white text-center">
+                                    <p className="text-slate-600 mb-6 text-sm leading-relaxed">
+                                        Your current network is not authorized for this exam workspace. Please connect from an approved venue network and try again.
+                                    </p>
+                                    <button
+                                        onClick={() => window.location.reload()}
+                                        className="w-full flex items-center justify-center px-4 py-2.5 bg-slate-900 text-white font-medium rounded-xl hover:bg-slate-800 transition-colors text-sm"
+                                    >
+                                        Retry Connection
+                                    </button>
+                                </div>
                             </div>
-                        )}
+                        ) : (
+                            <>
+                                {error && (
+                                    <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-3 text-rose-600 text-sm font-bold animate-shake">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                        {error}
+                                    </div>
+                                )}
 
-                        <form className="space-y-4">
+                                <form className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -277,6 +299,8 @@ export default function ExamLoginPage() {
                                 )}
                             </button>
                         </form>
+                            </>
+                        )}
                     </div>
                 </div>
 

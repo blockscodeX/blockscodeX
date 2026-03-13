@@ -22,6 +22,8 @@ interface CodingConfig {
     templates: Record<string, Template>;
     testCases: any[];
     showTestCases?: boolean;
+    allowedLanguages?: string[];
+    languageId?: string;
 }
 
 export default function CodingEditor({ question, onChange }: CodingEditorProps) {
@@ -31,35 +33,56 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
             python: { head: '', body: '# Write your code here', tail: '', solution: '' }
         },
         testCases: [],
-        showTestCases: true
+        showTestCases: true,
+        allowedLanguages: ['javascript', 'python'],
+        languageId: 'javascript'
+    };
+
+    const normalizeLanguageId = (languageId?: string) => {
+        if (!languageId) return '';
+        const normalized = languageId.toLowerCase();
+        if (normalized === 'c++' || normalized === 'cplusplus' || normalized === 'cxx') return 'cpp';
+        if (normalized === 'js') return 'javascript';
+        if (normalized === 'py') return 'python';
+        return normalized;
+    };
+
+    const normalizeConfig = (base?: any): CodingConfig => {
+        if (!base) return defaultConfig;
+
+        const rawTemplates = base.templates && typeof base.templates === 'object' ? base.templates : defaultConfig.templates;
+        const normalizedTemplates = Object.entries(rawTemplates).reduce((acc, [langId, template]: [string, any]) => {
+            acc[normalizeLanguageId(langId)] = template;
+            return acc;
+        }, {} as Record<string, Template>);
+
+        const templateKeys = Object.keys(normalizedTemplates);
+        const safeTemplateKeys = templateKeys.length > 0 ? templateKeys : Object.keys(defaultConfig.templates);
+        const languageId = normalizeLanguageId(base.languageId);
+
+        return {
+            ...base,
+            templates: safeTemplateKeys.length > 0 ? normalizedTemplates : defaultConfig.templates,
+            testCases: base.testCases || [],
+            showTestCases: base.showTestCases ?? true,
+            allowedLanguages: safeTemplateKeys,
+            languageId: safeTemplateKeys.includes(languageId) ? languageId : safeTemplateKeys[0]
+        };
     };
 
     // Use local state to prevent stale closure issues during rapid edits
     const [config, setConfig] = useState<CodingConfig>(() => {
-        const base = question.codingConfig;
-        if (!base) return defaultConfig;
-        return {
-            ...base,
-            templates: base.templates && Object.keys(base.templates).length > 0 ? base.templates : defaultConfig.templates,
-            testCases: base.testCases || [],
-            showTestCases: base.showTestCases ?? true
-        };
+        return normalizeConfig(question.codingConfig);
     });
 
     // Only sync from props when the question ID changes (e.g. switching questions)
     // This avoids overwriting local progress with stale props during the render loop
     React.useEffect(() => {
-        const base = question.codingConfig;
-        if (!base) {
-            setConfig(defaultConfig);
-            return;
+        const normalized = normalizeConfig(question.codingConfig);
+        setConfig(normalized);
+        if (!normalized.templates[activeLang]) {
+            setActiveLang(normalized.languageId || Object.keys(normalized.templates)[0] || 'javascript');
         }
-        setConfig({
-            ...base,
-            templates: base.templates && Object.keys(base.templates).length > 0 ? base.templates : defaultConfig.templates,
-            testCases: base.testCases || [],
-            showTestCases: base.showTestCases ?? true
-        });
     }, [question.id]);
 
     const { warning } = useToast();
@@ -86,27 +109,34 @@ export default function CodingEditor({ question, onChange }: CodingEditorProps) 
 
     const toggleLanguageSupport = (langId: string) => {
         const prev = configRef.current;
+        const normalizedLangId = normalizeLanguageId(langId);
         const newTemplates = { ...prev.templates };
-        if (newTemplates[langId]) {
+        if (newTemplates[normalizedLangId]) {
             if (Object.keys(newTemplates).length > 1) {
-                delete newTemplates[langId];
-                if (activeLang === langId) setActiveLang(Object.keys(newTemplates)[0]);
+                delete newTemplates[normalizedLangId];
+                if (activeLang === normalizedLangId) setActiveLang(Object.keys(newTemplates)[0]);
             } else {
                 warning("At least one language must be enabled.", "Action Required");
                 return;
             }
         } else {
             // Add default template
-            const langConfig = PLAYGROUND_LANGUAGES.find(l => l.id === langId);
-            newTemplates[langId] = {
+            const langConfig = PLAYGROUND_LANGUAGES.find(l => l.id === normalizedLangId);
+            newTemplates[normalizedLangId] = {
                 head: langConfig?.header || '',
                 body: langConfig?.initialBody || '',
                 tail: langConfig?.footer || '',
                 solution: ''
             };
-            setActiveLang(langId);
+            setActiveLang(normalizedLangId);
         }
-        const newConfig = { ...prev, templates: newTemplates };
+        const templateKeys = Object.keys(newTemplates);
+        const newConfig = {
+            ...prev,
+            templates: newTemplates,
+            allowedLanguages: templateKeys,
+            languageId: templateKeys.includes(normalizeLanguageId(prev.languageId)) ? normalizeLanguageId(prev.languageId) : templateKeys[0]
+        };
         setConfig(newConfig);
         onChange({ codingConfig: newConfig });
     };

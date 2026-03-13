@@ -254,6 +254,16 @@ export default function PublicExamPage() {
                 } catch (e: any) {
                     console.warn('Failed to check public status', e);
 
+                    if (
+                        e.status === 401 ||
+                        e.message?.includes('IP address is not whitelisted') ||
+                        e.message?.includes('Access denied') ||
+                        e.message?.toLowerCase?.().includes('network not allowed')
+                    ) {
+                        router.replace(`/exam/login?slug=${slug}&error=ip_blocked`);
+                        return;
+                    }
+
                     if (e.status === 404 || e.message === 'Exam not found') {
                         console.error('[ExamPage] Exam public status 404. Aborting.');
                         setIsNotFound(true);
@@ -546,6 +556,16 @@ export default function PublicExamPage() {
                 console.log("[ExamPage] Exam data loaded successfully, isLoading set to false");
             } catch (error: any) {
                 console.error("[ExamPage] Failed to load exam data", error);
+
+                if (
+                    error.status === 401 ||
+                    error.message?.includes('IP address is not whitelisted') ||
+                    error.message?.includes('Access denied') ||
+                    error.message?.toLowerCase?.().includes('network not allowed')
+                ) {
+                    window.location.href = `/exam/login?slug=${slug}&error=ip_blocked`;
+                    return;
+                }
 
                 // Check for 404 specifically
                 if (error.message?.includes('API Error: 404') || error.message?.includes('Not Found') || error.status === 404 || error.message === 'Exam not found') {
@@ -1228,7 +1248,7 @@ export default function PublicExamPage() {
                             {isOnline && (
                                 <div className="flex items-center justify-between gap-8 border-t border-slate-50 pt-2">
                                     <span className="text-slate-400 uppercase tracking-tighter">Sync Speed</span>
-                                    <span className="text-indigo-600 font-black">{downlink} MB/s</span>
+                                    <span className="text-indigo-600 font-black">{downlink > 0 ? `${downlink} MB/s` : 'Detecting...'}</span>
                                 </div>
                             )}
                         </div>
@@ -1281,8 +1301,8 @@ export default function PublicExamPage() {
 
     // Block the exam UI if the socket has not yet connected.
     // Feedback / success routes don't need the live socket so they bypass this.
-    const socketPending = connectionStatus === 'connecting' && !isFeedbackMode && !isSuccessMode;
-    const socketFailed  = connectionStatus === 'failed'    && !isFeedbackMode && !isSuccessMode;
+    const socketPending = connectionStatus === 'connecting' && isOnline && !isFeedbackMode && !isSuccessMode;
+    const socketFailed  = connectionStatus === 'failed' && isOnline && !isFeedbackMode && !isSuccessMode;
 
     // Show error wall when all socket retries are exhausted before first connect
     if (socketFailed) {
@@ -1421,14 +1441,14 @@ export default function PublicExamPage() {
 
             {/* Connection Alert Overlay */}
             {showOfflineAlert && (
-                <div className="fixed bottom-10 right-10 z-[100] animate-in slide-in-from-bottom-5 duration-300">
-                    <div className="bg-rose-600/95 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 border-4 border-rose-500/50 backdrop-blur-md">
-                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center animate-pulse shrink-0">
+                <div className="fixed bottom-6 right-6 z-[100] animate-in slide-in-from-bottom-3 duration-300 max-w-[340px] w-[calc(100vw-2rem)] sm:w-auto">
+                    <div className="bg-rose-600/95 text-white px-4 py-3 rounded-xl shadow-2xl flex items-start gap-3 border border-rose-400/50 backdrop-blur-md">
+                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center animate-pulse shrink-0 mt-0.5">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.58 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /></svg>
                         </div>
-                        <div>
-                            <h4 className="font-black text-sm uppercase tracking-wider">No Connection</h4>
-                            <p className="text-rose-100 text-xs font-bold opacity-90">Please check your internet source.</p>
+                        <div className="min-w-0">
+                            <h4 className="font-black text-xs uppercase tracking-wider">Network Lost</h4>
+                            <p className="text-rose-100 text-xs font-semibold opacity-90 break-words">Please check your internet connection.</p>
                         </div>
                     </div>
                 </div>

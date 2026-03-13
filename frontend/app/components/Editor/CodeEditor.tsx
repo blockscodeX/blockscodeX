@@ -12,7 +12,14 @@ export default function CodeEditor(props: CodeEditorProps) {
     const [activeTab, setActiveTab] = useState<"testcases" | "terminal" | "input">("testcases");
     const [selectedTestCase, setSelectedTestCase] = useState(0);
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [terminalHeight, setTerminalHeight] = useState(320);
+    const [isResizingTerminal, setIsResizingTerminal] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const terminalDrawerRef = useRef<HTMLDivElement>(null);
+    const resizeStartYRef = useRef(0);
+    const resizeStartHeightRef = useRef(320);
+    const terminalHeightRef = useRef(320);
+    const resizeAnimationFrameRef = useRef<number | null>(null);
 
     const { editorRef, view } = useEditor({ ...props, language: currentLang });
 
@@ -146,6 +153,59 @@ export default function CodeEditor(props: CodeEditorProps) {
         }
     };
 
+    const startTerminalResize = (event: React.MouseEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        resizeStartYRef.current = event.clientY;
+        const currentHeight = terminalDrawerRef.current?.offsetHeight || terminalHeight;
+        resizeStartHeightRef.current = currentHeight;
+        terminalHeightRef.current = currentHeight;
+        setIsResizingTerminal(true);
+    };
+
+    useEffect(() => {
+        if (!isResizingTerminal) return;
+
+        const onMouseMove = (event: MouseEvent) => {
+            if (!containerRef.current) return;
+
+            const deltaY = resizeStartYRef.current - event.clientY;
+            const containerHeight = containerRef.current.clientHeight;
+
+            const minHeight = 180;
+            const maxHeight = Math.max(minHeight, containerHeight - 140);
+            const nextHeight = Math.min(maxHeight, Math.max(minHeight, resizeStartHeightRef.current + deltaY));
+
+            terminalHeightRef.current = nextHeight;
+
+            if (resizeAnimationFrameRef.current == null) {
+                resizeAnimationFrameRef.current = requestAnimationFrame(() => {
+                    if (terminalDrawerRef.current) {
+                        terminalDrawerRef.current.style.height = `${terminalHeightRef.current}px`;
+                    }
+                    resizeAnimationFrameRef.current = null;
+                });
+            }
+        };
+
+        const onMouseUp = () => {
+            setTerminalHeight(terminalHeightRef.current);
+            setIsResizingTerminal(false);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            if (resizeAnimationFrameRef.current != null) {
+                cancelAnimationFrame(resizeAnimationFrameRef.current);
+                resizeAnimationFrameRef.current = null;
+            }
+        };
+    }, [isResizingTerminal]);
+
     return (
         <div
             ref={containerRef}
@@ -176,13 +236,15 @@ export default function CodeEditor(props: CodeEditorProps) {
                                 Read Only
                             </div>
                         )}
-                        <button
-                            onClick={takeSnapshot}
-                            title="Take Snapshot"
-                            className="hover:text-[var(--brand)] transition-colors"
-                        >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-                        </button>
+                        {!props.hideSnapshotButton && (
+                            <button
+                                onClick={takeSnapshot}
+                                title="Take Snapshot"
+                                className="hover:text-[var(--brand)] transition-colors"
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                            </button>
+                        )}
                         <button
                             onClick={toggleFullScreen}
                             title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
@@ -228,9 +290,16 @@ export default function CodeEditor(props: CodeEditorProps) {
 
             {/* TERMINAL DRAWER */}
             <div
-                className={`absolute bottom-[60px] left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 ease-in-out z-[100] ${isTerminalOpen ? 'h-[320px] opacity-100 translate-y-0' : 'h-0 opacity-0 translate-y-10 pointer-events-none'
-                    }`}
+                ref={terminalDrawerRef}
+                className={`absolute bottom-[60px] left-0 right-0 bg-white border-t border-slate-200 ease-in-out z-[100] ${isResizingTerminal ? '' : 'transition-all duration-300'} ${isTerminalOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
+                    } ${isResizingTerminal ? 'select-none' : ''}`}
+                style={{ height: isTerminalOpen ? `${terminalHeight}px` : '0px' }}
             >
+                <div
+                    onMouseDown={startTerminalResize}
+                    className="h-2 w-full cursor-ns-resize"
+                    title="Drag to resize"
+                />
                 <div className="flex items-center justify-between bg-[#fff4ee] px-4 h-11 select-none">
                     <div className="flex items-center h-full gap-4 pl-2">
                         {["testcases", "terminal", "input"].map((t) => (

@@ -9,6 +9,20 @@ import { Roles } from '../auth/roles.decorator';
 export class ExamController {
     constructor(private examService: ExamService) { }
 
+    private getClientIp(req: any): string {
+        const forwardedFor = req?.headers?.['x-forwarded-for'];
+        if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
+            return forwardedFor.split(',')[0].trim();
+        }
+
+        const realIp = req?.headers?.['x-real-ip'];
+        if (typeof realIp === 'string' && realIp.trim().length > 0) {
+            return realIp.trim();
+        }
+
+        return req?.ip || '';
+    }
+
     @Get('app-config')
     getAppConfig() {
         return this.examService.getAppConfig();
@@ -27,7 +41,8 @@ export class ExamController {
     @Get(':slug/public-status')
     async getPublicStatus(@Param('slug') slug: string, @Req() req: any) {
         // console.log('[ExamController] getPublicStatus slug:', slug);
-        return this.examService.getPublicStatus(slug, req.ip);
+        const clientIp = this.getClientIp(req);
+        return this.examService.getPublicStatus(slug, clientIp);
     }
 
     @Get(':slug/check')
@@ -64,7 +79,7 @@ export class ExamController {
             throw new BadRequestException('Assessment type does not support live sessions');
         }
 
-        const ip = req.ip;
+        const ip = this.getClientIp(req);
 
         if (lookup.allowedIPs && lookup.allowedIPs.trim().length > 0) {
             const allowedList = lookup.allowedIPs.split(',').map((i: string) => i.trim());

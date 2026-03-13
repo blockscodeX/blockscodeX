@@ -34,9 +34,10 @@ interface PythonNotebookProps {
     fontSize?: number;
     onChange?: (code: string) => void;
     onSubmit?: (code: string) => void;
+    isExamMode?: boolean;
 }
 
-export default function PythonNotebook({ initialCode = "", readOnly = false, fontSize, onChange, onSubmit }: PythonNotebookProps) {
+export default function PythonNotebook({ initialCode = "", readOnly = false, fontSize, onChange, onSubmit, isExamMode = false }: PythonNotebookProps) {
     const [code, setCode] = useState(initialCode);
 
     const handleCodeChange = (newCode: string) => {
@@ -164,6 +165,7 @@ export default function PythonNotebook({ initialCode = "", readOnly = false, fon
                                 className="flex-1 border-none"
                                 hideLanguageSelector={true}
                                 hideRunBar={true}
+                                hideSnapshotButton={isExamMode}
                                 customToolbarContent={
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center gap-2">

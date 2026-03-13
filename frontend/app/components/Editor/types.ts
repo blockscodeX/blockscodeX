@@ -50,4 +50,5 @@ export interface CodeEditorProps {
     testCases?: Array<any>;
     terminalOutput?: string;
     hideSubmit?: boolean;
+    hideSnapshotButton?: boolean;
 }
