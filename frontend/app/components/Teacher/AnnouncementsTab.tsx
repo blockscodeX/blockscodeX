@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { TeacherService } from "@/services/api/TeacherService";
 import { useToast } from "@/app/components/Common/Toast";
-import { Megaphone, Plus, X, Trash2, Paperclip, FileText, ImageIcon, File, Send, Check } from "lucide-react";
+import { Megaphone, Plus, X, Trash2, Paperclip, FileText, ImageIcon, File, Send, Check, Pencil } from "lucide-react";
 import dynamic from "next/dynamic";
 
 // Lazy load RichTextEditor to avoid SSR issues
@@ -15,6 +15,7 @@ export default function AnnouncementsTab() {
     const [groups, setGroups] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showComposeModal, setShowComposeModal] = useState(false);
+    const [editingAnnouncement, setEditingAnnouncement] = useState<any | null>(null);
 
     const loadData = async () => {
         try {
@@ -145,6 +146,12 @@ export default function AnnouncementsTab() {
                                         </p>
                                     </div>
                                     <button
+                                        onClick={() => setEditingAnnouncement(ann)}
+                                        className="p-2 text-slate-300 hover:text-[var(--brand)] hover:bg-[var(--brand-light)]/40 rounded-xl transition-all opacity-0 group-hover/ann:opacity-100"
+                                    >
+                                        <Pencil size={16} />
+                                    </button>
+                                    <button
                                         onClick={() => handleDelete(ann.id)}
                                         className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover/ann:opacity-100"
                                     >
@@ -166,6 +173,16 @@ export default function AnnouncementsTab() {
                 />,
                 document.body
             )}
+
+            {editingAnnouncement && typeof document !== 'undefined' && createPortal(
+                <ComposeAnnouncementModal
+                    groups={groups}
+                    initialAnnouncement={editingAnnouncement}
+                    onClose={() => setEditingAnnouncement(null)}
+                    onSent={() => { setEditingAnnouncement(null); loadData(); }}
+                />,
+                document.body
+            )}
         </>
     );
 }
@@ -180,12 +197,17 @@ function AttachmentIcon({ type }: { type: string }) {
 
 // ─── COMPOSE ANNOUNCEMENT MODAL ────────────────────────────────────────
 
-function ComposeAnnouncementModal({ groups, onClose, onSent }: { groups: any[]; onClose: () => void; onSent: () => void }) {
+function ComposeAnnouncementModal({ groups, onClose, onSent, initialAnnouncement }: { groups: any[]; onClose: () => void; onSent: () => void; initialAnnouncement?: any }) {
     const { success, error: toastError } = useToast();
-    const [title, setTitle] = useState("");
-    const [content, setContent] = useState("");
-    const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-    const [attachments, setAttachments] = useState<{ name: string; url: string; type: string; size: number }[]>([]);
+    const isEditing = !!initialAnnouncement?.id;
+    const [title, setTitle] = useState(initialAnnouncement?.title || "");
+    const [content, setContent] = useState(initialAnnouncement?.content || "");
+    const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(
+        Array.isArray(initialAnnouncement?.groups) ? initialAnnouncement.groups.map((g: any) => g.id) : []
+    );
+    const [attachments, setAttachments] = useState<{ name: string; url: string; type: string; size: number }[]>(
+        Array.isArray(initialAnnouncement?.attachments) ? initialAnnouncement.attachments : []
+    );
     const [isUploading, setIsUploading] = useState(false);
     const [isSending, setIsSending] = useState(false);
 
@@ -238,16 +260,23 @@ function ComposeAnnouncementModal({ groups, onClose, onSent }: { groups: any[]; 
 
         setIsSending(true);
         try {
-            await TeacherService.createAnnouncement({
+            const payload = {
                 title: title.trim(),
                 content,
                 groupIds: selectedGroupIds,
                 attachments: attachments.length > 0 ? attachments : undefined
-            });
-            success("Announcement sent!");
+            };
+
+            if (isEditing) {
+                await TeacherService.updateAnnouncement(initialAnnouncement.id, payload);
+                success("Announcement updated!");
+            } else {
+                await TeacherService.createAnnouncement(payload);
+                success("Announcement sent!");
+            }
             onSent();
         } catch (err) {
-            toastError("Failed to send announcement");
+            toastError(isEditing ? "Failed to update announcement" : "Failed to send announcement");
         } finally {
             setIsSending(false);
         }
@@ -262,8 +291,8 @@ function ComposeAnnouncementModal({ groups, onClose, onSent }: { groups: any[]; 
                 </button>
 
                 <div className="mb-8">
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">New Announcement</h2>
-                    <p className="text-sm font-bold text-slate-400 mt-1">Compose and send to your student groups.</p>
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">{isEditing ? "Edit Announcement" : "New Announcement"}</h2>
+                    <p className="text-sm font-bold text-slate-400 mt-1">{isEditing ? "Update and resend to selected student groups." : "Compose and send to your student groups."}</p>
                 </div>
 
                 <div className="space-y-6">
@@ -361,7 +390,7 @@ function ComposeAnnouncementModal({ groups, onClose, onSent }: { groups: any[]; 
                     disabled={isSending || !title.trim() || selectedGroupIds.length === 0}
                     className="w-full mt-8 py-5 bg-[var(--brand)] hover:bg-[var(--brand-dark)] disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-[var(--brand)]/20 active:scale-95 flex items-center justify-center gap-2"
                 >
-                    <Send size={16} /> {isSending ? "Sending..." : "Send Announcement"}
+                    <Send size={16} /> {isSending ? (isEditing ? "Updating..." : "Sending...") : (isEditing ? "Update Announcement" : "Send Announcement")}
                 </button>
             </div>
         </div>

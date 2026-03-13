@@ -344,6 +344,29 @@ export const TeacherService = {
             });
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
+                const shouldRetryWithoutDraftIdentity = Boolean(
+                    payload?.slug && (res.status === 409 || res.status >= 500)
+                );
+
+                if (shouldRetryWithoutDraftIdentity) {
+                    const retryPayload = { ...payload };
+                    delete retryPayload.id;
+                    delete retryPayload.slug;
+                    delete retryPayload.inviteToken;
+
+                    const retryRes = await authFetch('/teacher/exams', {
+                        method: 'POST',
+                        body: JSON.stringify(retryPayload)
+                    });
+
+                    if (retryRes.ok) {
+                        return await retryRes.json();
+                    }
+
+                    const retryErrorData = await retryRes.json().catch(() => ({}));
+                    throw new Error(retryErrorData.message || errorData.message || 'Failed to create exam');
+                }
+
                 throw new Error(errorData.message || 'Failed to create exam');
             }
             return await res.json();
@@ -656,6 +679,20 @@ export const TeacherService = {
                 body: JSON.stringify(data)
             });
             if (!res.ok) throw new Error('Failed to create announcement');
+            return await res.json();
+        } catch (error) {
+            console.error('[TeacherService] Error', error);
+            throw error;
+        }
+    },
+
+    async updateAnnouncement(id: string, data: { title: string; content: string; groupIds: string[]; attachments?: any[] }) {
+        try {
+            const res = await authFetch(`/teacher/announcements/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update announcement');
             return await res.json();
         } catch (error) {
             console.error('[TeacherService] Error', error);

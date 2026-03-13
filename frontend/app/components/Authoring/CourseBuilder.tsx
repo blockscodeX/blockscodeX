@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Plus, Layout, Settings, Eye, EyeOff, Share2, Save, GripVertical, ChevronRight, FileText, Code, Globe, HelpCircle, CheckCircle2, BarChart3, Sparkles, Trash2, TerminalSquare, PanelLeftClose, PanelLeftOpen, Calendar, Lock } from "lucide-react";
+import { Plus, Layout, Settings, Eye, EyeOff, Share2, Save, GripVertical, ChevronRight, FileText, Code, Globe, HelpCircle, CheckCircle2, BarChart3, Sparkles, Trash2, TerminalSquare, PanelLeftClose, PanelLeftOpen, Calendar, Lock, RotateCcw } from "lucide-react";
 import { Course, Section, Question, TestSection } from "./types";
 import { TeacherService } from "@/services/api/TeacherService";
 import QuestionBuilder from "./QuestionBuilder/QuestionBuilder";
@@ -11,24 +11,26 @@ import AlertModal from "../Common/AlertModal";
 import { useToast } from "../Common/Toast";
 import AiCourseBuilderModal from "./AiCourseBuilderModal";
 
+const createDefaultCourse = (): Course => ({
+    title: "",
+    shortDescription: "",
+    longDescription: "",
+    difficulty: "Beginner",
+    tags: [],
+    isVisible: false,
+    sections: [
+        {
+            id: "sec-1",
+            title: "Introduction",
+            questions: []
+        }
+    ],
+    tests: []
+});
+
 export default function CourseBuilder({ initialData, onDelete, onSave, basePath, userRole, orgPermissions = { allowCourseTests: true }, organizationId }: { initialData?: Course, onDelete?: () => void, onSave?: (data: any) => Promise<void>, basePath?: string, userRole?: 'admin' | 'teacher' | 'super-admin', orgPermissions?: { allowCourseTests?: boolean }, organizationId?: string }) {
     const { success } = useToast();
-    const [course, setCourse] = useState<Course>(initialData || {
-        title: "",
-        shortDescription: "",
-        longDescription: "",
-        difficulty: "Beginner",
-        tags: [],
-        isVisible: false,
-        sections: [
-            {
-                id: "sec-1",
-                title: "Introduction",
-                questions: []
-            }
-        ],
-        tests: []
-    });
+    const [course, setCourse] = useState<Course>(initialData || createDefaultCourse());
 
     const [activeTab, setActiveTab] = useState<'unit' | 'test'>('unit');
     const [activeSectionId, setActiveSectionId] = useState<string>("sec-1");
@@ -40,11 +42,15 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean, title: string, message: string, type?: 'danger' | 'warning' | 'info', onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+    const initialCourseId = initialData?.id;
+
+    const getInitialDraftKey = () => initialCourseId ? `course_builder_draft_${initialCourseId}` : 'course_builder_draft_new';
+    const getCurrentDraftKey = () => course.id ? `course_builder_draft_${course.id}` : 'course_builder_draft_new';
 
     // Persistence: Load from localStorage on mount
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const key = initialData?.id ? `course_builder_draft_${initialData.id}` : 'course_builder_draft_new';
+            const key = getInitialDraftKey();
             const saved = localStorage.getItem(key);
             if (saved) {
                 try {
@@ -61,7 +67,7 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
     // Persistence: Save to localStorage on change
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const key = course.id ? `course_builder_draft_${course.id}` : 'course_builder_draft_new';
+            const key = getCurrentDraftKey();
             const timeout = setTimeout(() => {
                 localStorage.setItem(key, JSON.stringify(course));
             }, 1000); // Debounce 1s
@@ -223,6 +229,24 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
         });
     };
 
+    const resetDraft = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(getInitialDraftKey());
+            localStorage.removeItem(getCurrentDraftKey());
+            localStorage.removeItem('course_builder_draft_new');
+        }
+
+        const nextCourse = initialData || createDefaultCourse();
+        setCourse(nextCourse);
+        setActiveTab('unit');
+        setActiveStep('builder');
+        setActiveSectionId(nextCourse.sections?.[0]?.id || 'sec-1');
+        setActiveQuestionId(null);
+        setShowAddMenu(null);
+        setPreviewMode(null);
+        success("Draft reset successfully", "Draft Reset");
+    };
+
     return (
         <div className="flex flex-col h-screen bg-white">
             <Navbar basePath={basePath} userRole={userRole} />
@@ -262,6 +286,14 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
                 </div>
 
                 <div className="flex items-center justify-end gap-3 w-1/3">
+                    <button
+                        onClick={resetDraft}
+                        className="flex items-center gap-2 px-4 py-2 text-slate-500 hover:bg-slate-50 rounded-xl transition-all text-xs font-black uppercase tracking-widest"
+                        title="Reset local draft"
+                    >
+                        <RotateCcw size={16} />
+                        Reset Draft
+                    </button>
                     <button
                         onClick={() => setIsAiModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-[var(--brand-light)]/30 text-[var(--brand)] hover:bg-[var(--brand-light)]/50 rounded-xl transition-all text-xs font-black uppercase tracking-widest"

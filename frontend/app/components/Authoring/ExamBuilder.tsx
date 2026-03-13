@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { TeacherService } from "@/services/api/TeacherService";
-import { Plus, Layout, Settings, Share2, GripVertical, ChevronRight, Code, Globe, HelpCircle, CheckCircle2, BarChart3, Sparkles, Trash2, Clock, Target, Eye, EyeOff, TerminalSquare, PanelLeftClose, PanelLeftOpen, Lock } from "lucide-react";
+import { Plus, Layout, Settings, Share2, GripVertical, ChevronRight, Code, Globe, HelpCircle, CheckCircle2, BarChart3, Sparkles, Trash2, Clock, Target, Eye, EyeOff, TerminalSquare, PanelLeftClose, PanelLeftOpen, Lock, RotateCcw } from "lucide-react";
 import { Course as Exam, Section, Question } from "./types";
 import QuestionBuilder from "./QuestionBuilder/QuestionBuilder";
 import RichTextEditor from "./RichTextEditor";
@@ -13,24 +13,26 @@ import AlertModal from "../Common/AlertModal";
 import { useToast } from "../Common/Toast";
 import AiExamBuilderModal from "./AiExamBuilderModal";
 
+const createDefaultExam = (): Partial<Exam> => ({
+    title: "",
+    shortDescription: "",
+    longDescription: "",
+    difficulty: "Intermediate",
+    tags: [],
+    isVisible: false,
+    sections: [
+        {
+            id: "sec-1",
+            title: "Core Assessment",
+            questions: []
+        }
+    ]
+});
+
 export default function ExamBuilder({ initialData, onDelete, basePath, userRole, orgPermissions = { allowAppExams: true, allowAIProctoring: true }, organizationId }: { initialData?: Partial<Exam>, onDelete?: () => void, basePath?: string, userRole?: 'admin' | 'teacher' | 'super-admin', orgPermissions?: { allowAppExams?: boolean, allowAIProctoring?: boolean }, organizationId?: string }) {
     const { success } = useToast();
     const router = useRouter();
-    const [exam, setExam] = useState<Partial<Exam>>(initialData || {
-        title: "",
-        shortDescription: "",
-        longDescription: "",
-        difficulty: "Intermediate",
-        tags: [],
-        isVisible: false,
-        sections: [
-            {
-                id: "sec-1",
-                title: "Core Assessment",
-                questions: []
-            }
-        ]
-    });
+    const [exam, setExam] = useState<Partial<Exam>>(initialData || createDefaultExam());
 
     const [activeSectionId, setActiveSectionId] = useState<string>("sec-1");
     const [activeStep, setActiveStep] = useState<'metadata' | 'builder'>('builder');
@@ -42,7 +44,9 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
     const [alertConfig, setAlertConfig] = useState<{ isOpen: boolean, title: string, message: string, type?: 'danger' | 'warning' | 'info', onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
-    const getDraftKey = () => initialData?.id ? `exam_builder_draft_${initialData.id}` : 'exam_builder_draft_new';
+    const initialExamId = initialData?.id;
+    const isEditMode = Boolean(initialExamId);
+    const getDraftKey = () => initialExamId ? `exam_builder_draft_${initialExamId}` : 'exam_builder_draft_new';
 
     // Persistence: Load from localStorage on mount
     useEffect(() => {
@@ -52,7 +56,14 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    setExam(prev => ({ ...prev, ...parsed }));
+                    const draftData = isEditMode
+                        ? parsed
+                        : (() => {
+                            const { id, slug, inviteToken, ...rest } = parsed || {};
+                            return rest;
+                        })();
+
+                    setExam(prev => ({ ...prev, ...draftData }));
                     success("Restored exam draft from local storage", "Draft Restored");
                 } catch (e) {
                     console.error("Failed to load exam draft", e);
@@ -66,11 +77,18 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
         if (typeof window !== 'undefined') {
             const key = getDraftKey();
             const timeout = setTimeout(() => {
-                localStorage.setItem(key, JSON.stringify(exam));
+                const draftToSave = isEditMode
+                    ? exam
+                    : (() => {
+                        const { id, ...rest } = exam as any;
+                        return rest;
+                    })();
+
+                localStorage.setItem(key, JSON.stringify(draftToSave));
             }, 1000); // Debounce 1s
             return () => clearTimeout(timeout);
         }
-    }, [exam]);
+    }, [exam, isEditMode]);
 
     const activeSection = exam.sections?.find(s => s.id === activeSectionId);
     const activeQuestion = activeSection?.questions.find(q => q.id === activeQuestionId);
@@ -176,6 +194,20 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
         });
     };
 
+    const resetDraft = () => {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(getDraftKey());
+        }
+
+        const nextExam = initialData || createDefaultExam();
+        setExam(nextExam);
+        setActiveSectionId(nextExam.sections?.[0]?.id || "sec-1");
+        setActiveQuestionId(null);
+        setShowAddMenu(null);
+        setPreviewMode(null);
+        success("Draft reset successfully", "Draft Reset");
+    };
+
     return (
         <div className="flex flex-col h-screen bg-white">
             <Navbar basePath={basePath} userRole={userRole} />
@@ -213,6 +245,14 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                 </div>
 
                 <div className="flex items-center justify-end gap-3 w-1/3">
+                    <button
+                        onClick={resetDraft}
+                        className="flex items-center gap-2 px-4 py-2 text-slate-500 hover:bg-slate-50 rounded-xl transition-all text-xs font-black uppercase tracking-widest"
+                        title="Reset local draft"
+                    >
+                        <RotateCcw size={16} />
+                        Reset Draft
+                    </button>
                     <button
                         onClick={() => setIsAiModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-[var(--brand-light)]/30 text-[var(--brand)] hover:bg-[var(--brand-light)]/50 rounded-xl transition-all text-xs font-black uppercase tracking-widest"

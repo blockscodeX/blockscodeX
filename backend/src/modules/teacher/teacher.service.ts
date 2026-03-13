@@ -1792,6 +1792,63 @@ export class TeacherService {
         return announcement;
     }
 
+    async updateAnnouncement(announcementId: string, user: any, data: {
+        title: string;
+        content: string;
+        groupIds: string[];
+        attachments?: { name: string; url: string; type: string; size: number }[];
+    }) {
+        const existing = await this.prisma.announcement.findUnique({
+            where: { id: announcementId },
+            include: { groups: { select: { id: true } } }
+        });
+
+        if (!existing) throw new NotFoundException('Announcement not found');
+        if (existing.teacherId !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            throw new ForbiddenException('Access denied');
+        }
+
+        if (!data.title?.trim()) throw new BadRequestException('Title is required');
+        if (!data.content?.trim()) throw new BadRequestException('Content is required');
+        if (!data.groupIds || data.groupIds.length === 0) throw new BadRequestException('At least one group must be selected');
+
+        const groupOwnerId = existing.teacherId;
+        const groups = await this.prisma.studentGroup.findMany({
+            where: { id: { in: data.groupIds }, teacherId: groupOwnerId },
+            select: { id: true }
+        });
+
+        if (groups.length !== data.groupIds.length) {
+            throw new ForbiddenException('One or more groups not found or not owned by the announcement teacher');
+        }
+
+        const oldAttachments = Array.isArray(existing.attachments) ? (existing.attachments as any[]) : [];
+        const nextAttachments = data.attachments || [];
+        const nextAttachmentUrls = new Set(nextAttachments.map((att: any) => att?.url).filter(Boolean));
+
+        for (const att of oldAttachments) {
+            if (att?.url && !nextAttachmentUrls.has(att.url)) {
+                await this.storageService.deleteFile(att.url).catch(() => undefined);
+            }
+        }
+
+        return this.prisma.announcement.update({
+            where: { id: announcementId },
+            data: {
+                title: data.title.trim(),
+                content: data.content,
+                attachments: nextAttachments,
+                groups: {
+                    set: data.groupIds.map(id => ({ id }))
+                }
+            },
+            include: {
+                groups: { select: { id: true, name: true } },
+                _count: { select: { reads: true } }
+            }
+        });
+    }
+
     async deleteAnnouncement(announcementId: string, user: any) {
         const announcement = await this.prisma.announcement.findUnique({
             where: { id: announcementId },

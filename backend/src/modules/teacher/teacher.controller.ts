@@ -278,6 +278,15 @@ export class TeacherController {
         return this.teacherService.createAnnouncement(user, data);
     }
 
+    @Put('announcements/:id')
+    async updateAnnouncement(
+        @Param('id') id: string,
+        @Body() data: { title: string; content: string; groupIds: string[]; attachments?: any[] },
+        @User() user: any
+    ) {
+        return this.teacherService.updateAnnouncement(id, user, data);
+    }
+
     @Delete('announcements/:id')
     async deleteAnnouncement(@Param('id') id: string, @User() user: any) {
         return this.teacherService.deleteAnnouncement(id, user);

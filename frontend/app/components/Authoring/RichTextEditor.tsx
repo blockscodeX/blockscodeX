@@ -116,22 +116,51 @@ export default function RichTextEditor({ content, onChange, placeholder }: RichT
         editor.chain().focus().extendMarkRange(linkName).setLink({ href: url }).run();
     };
 
+    const removeActiveNode = (nodeType: 'image' | 'youtube') => {
+        if (!editor.isActive(nodeType)) return;
+        editor.chain().focus().selectParentNode().deleteSelection().run();
+    };
+
     const addImage = () => {
-        const url = window.prompt('Image URL');
-        if (url) {
-            editor.chain().focus().setImage({ src: url }).run();
+        const existingSrc = editor.isActive('image') ? editor.getAttributes('image').src || '' : '';
+        const url = window.prompt('Image URL', existingSrc);
+        if (url === null) return;
+
+        const nextUrl = url.trim();
+        if (!nextUrl) {
+            removeActiveNode('image');
+            return;
         }
+
+        if (editor.isActive('image')) {
+            editor.chain().focus().updateAttributes('image', { src: nextUrl }).run();
+            return;
+        }
+
+        editor.chain().focus().setImage({ src: nextUrl }).run();
     };
 
     const addYoutube = () => {
-        const url = window.prompt('YouTube URL');
-        if (url) {
-            editor.commands.setYoutubeVideo({
-                src: url,
-                width: Math.max(320, parseInt('100%', 10)) as any,
-                height: Math.max(180, parseInt('auto', 10)) as any,
-            });
+        const existingSrc = editor.isActive('youtube') ? editor.getAttributes('youtube').src || '' : '';
+        const url = window.prompt('YouTube URL', existingSrc);
+        if (url === null) return;
+
+        const nextUrl = url.trim();
+        if (!nextUrl) {
+            removeActiveNode('youtube');
+            return;
         }
+
+        if (editor.isActive('youtube')) {
+            editor.chain().focus().updateAttributes('youtube', { src: nextUrl }).run();
+            return;
+        }
+
+        editor.commands.setYoutubeVideo({
+            src: nextUrl,
+            width: 640,
+            height: 360,
+        });
     };
 
     return (
