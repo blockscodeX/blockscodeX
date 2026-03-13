@@ -55,6 +55,16 @@ async function handleRequest(request: NextRequest, params: Promise<{ path: strin
         headers['x-real-ip'] = realIp;
     }
 
+    const userAgent = request.headers.get('user-agent');
+    if (userAgent) {
+        headers['user-agent'] = userAgent;
+    }
+
+    const clientPlatform = request.headers.get('x-client-platform');
+    if (clientPlatform) {
+        headers['x-client-platform'] = clientPlatform;
+    }
+
     if (token) {
         headers['Authorization'] = `Bearer ${token}`; // For strategies checking Bearer
         headers['Cookie'] = `auth_token=${token}`;    // For strategies checking Cookie (redundancy)

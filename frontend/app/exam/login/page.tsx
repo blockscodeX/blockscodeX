@@ -29,6 +29,15 @@ export default function ExamLoginPage() {
 
     const displayName = orgContext?.name || BRAND.name;
     const displayLogo = orgContext?.logo || BRAND.logoImage;
+    const APP_DOWNLOAD_URL = "https://github.com/Sumanydv/electron-app-download/releases/download/v0.0.1/blockscode-Setup-0.0.1.exe";
+
+    const isElectronClient = () => {
+        if (typeof window === 'undefined') return false;
+        const userAgent = navigator.userAgent.toLowerCase();
+        return Boolean((window as any).electronAPI) || userAgent.includes('electron');
+    };
+
+    const isAppRequired = error === 'APP_REQUIRED';
 
     useEffect(() => {
         if (slugFromQuery) {
@@ -36,6 +45,12 @@ export default function ExamLoginPage() {
                 try {
                     const data = await ExamService.getExamPublicStatus(slugFromQuery!);
                     setExamInfo(data);
+
+                    if (data?.examMode === 'App' && !isElectronClient()) {
+                        setError('APP_REQUIRED');
+                        setIsCheckingStatus(false);
+                        return;
+                    }
 
                     // Check if exam hasn't started yet
                     if (data.startTime) {
@@ -73,6 +88,8 @@ export default function ExamLoginPage() {
             setError('Your exam session has been terminated by the administrator. Contact your teacher.');
         } else if (errorType === 'ip_blocked') {
             setError('Network Not Allowed.');
+        } else if (errorType === 'app_required') {
+            setError('APP_REQUIRED');
         } else if (errorType === 'not_student') {
             setError('Access Denied: Only Student accounts can access exams. Please log in with a student account or use an incognito window.');
         }
@@ -121,6 +138,9 @@ export default function ExamLoginPage() {
                 router.push('/exam');
             }
         } catch (err: any) {
+            if (err.message && err.message.includes('APP_REQUIRED')) {
+                setError('APP_REQUIRED');
+            } else 
             if (err.message && (err.message.includes('EXAM_ALREADY_ACTIVE') || err.message.includes('409'))) {
                 setError('This exam is already active on another device or tab. Please close other instances and wait 2 minutes to retry.');
             } else if (err.message && err.message.includes('EXAM_ALREADY_SUBMITTED')) {
@@ -167,7 +187,30 @@ export default function ExamLoginPage() {
                             <p className="text-slate-500 font-medium">Enter your details to access the exam</p>
                         </div>
 
-                        {error === 'Network Not Allowed.' ? (
+                        {isAppRequired ? (
+                            <div className="bg-white rounded-2xl border border-indigo-200 overflow-hidden shadow-sm">
+                                <div className="bg-indigo-50 p-6 flex flex-col items-center justify-center border-b border-indigo-100">
+                                    <div className="h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center mb-4">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-600"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M12 17h.01" /></svg>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-indigo-700">App Required</h2>
+                                </div>
+                                <div className="p-6 bg-white text-center space-y-3">
+                                    <p className="text-slate-600 text-sm leading-relaxed">
+                                        This exam is configured for <span className="font-bold text-slate-800">App (Secure)</span> mode and cannot be attempted in a web browser.
+                                    </p>
+                                    <p className="text-slate-500 text-xs leading-relaxed">
+                                        Download and open the desktop exam application, then login again with your exam credentials.
+                                    </p>
+                                    <a
+                                        href={APP_DOWNLOAD_URL}
+                                        className="w-full inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors text-sm"
+                                    >
+                                        Download Exam App
+                                    </a>
+                                </div>
+                            </div>
+                        ) : error === 'Network Not Allowed.' ? (
                             <div className="bg-white rounded-2xl border border-rose-200 overflow-hidden shadow-sm">
                                 <div className="bg-rose-50 p-6 flex flex-col items-center justify-center border-b border-rose-100">
                                     <div className="h-16 w-16 rounded-full bg-rose-100 flex items-center justify-center mb-4">

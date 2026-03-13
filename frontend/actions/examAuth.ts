@@ -1,14 +1,24 @@
 'use server'
 
 import { cookies } from 'next/headers';
+import { headers as nextHeaders } from 'next/headers';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export async function examLoginAction(email: string, testCode: string, password?: string, slug?: string | null) {
     try {
+        const incomingHeaders = await nextHeaders();
+        const userAgent = incomingHeaders.get('user-agent') || '';
+        const derivedClientPlatform = userAgent.toLowerCase().includes('electron') ? 'electron' : 'web';
+        const clientPlatform = incomingHeaders.get('x-client-platform') || derivedClientPlatform;
+
         const res = await fetch(`${BASE_URL}/auth/exam-login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'user-agent': userAgent,
+                'x-client-platform': clientPlatform
+            },
             body: JSON.stringify({ email, testCode, password, slug })
         });
 

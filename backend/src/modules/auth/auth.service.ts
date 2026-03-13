@@ -118,7 +118,25 @@ export class AuthService {
         });
     }
 
-    async examLogin(email: string, testCode: string, password?: string, slug?: string) {
+    private isAppClient(ctx?: { userAgent?: string; clientPlatform?: string }): boolean {
+        const userAgent = String(ctx?.userAgent || '').toLowerCase();
+        const clientPlatform = String(ctx?.clientPlatform || '').toLowerCase();
+
+        return (
+            clientPlatform.includes('electron') ||
+            clientPlatform.includes('desktop') ||
+            clientPlatform.includes('app') ||
+            userAgent.includes('electron')
+        );
+    }
+
+    async examLogin(
+        email: string,
+        testCode: string,
+        password?: string,
+        slug?: string,
+        clientCtx?: { userAgent?: string; clientPlatform?: string }
+    ) {
         let whereClause: any = { testCode };
         if (slug) {
             whereClause.slug = slug;
@@ -128,6 +146,10 @@ export class AuthService {
             where: whereClause
         });
         if (!exam) throw new UnauthorizedException('Invalid test code');
+
+        if (exam.examMode === 'App' && !this.isAppClient(clientCtx)) {
+            throw new UnauthorizedException('APP_REQUIRED');
+        }
 
         const user = await this.prisma.user.findFirst({
             where: { email },

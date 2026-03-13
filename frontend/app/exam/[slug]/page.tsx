@@ -81,6 +81,7 @@ export default function PublicExamPage() {
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
     const [tabSwitchLimit, setTabSwitchLimit] = useState<number | null>(null);
     const [canShowFullscreenWarning, setCanShowFullscreenWarning] = useState(false);
+    const [isElectronRuntime, setIsElectronRuntime] = useState(false);
     const [isAiProctoringEnabled, setIsAiProctoringEnabled] = useState(false);
 
     const [user, setUser] = useState<any>(null);
@@ -94,6 +95,7 @@ export default function PublicExamPage() {
     const hasInteractedRef = useRef(false);
     const debouncedSaveRef = useRef<any>(null);
     const fiveMinWarningShownRef = useRef(false);
+    const electronStrictModeRef = useRef<boolean | null>(null);
 
     // Exam ID for socket and monitoring
     const examId = slug as string;
@@ -135,13 +137,40 @@ export default function PublicExamPage() {
     }, [isOnline]);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const ua = navigator.userAgent.toLowerCase();
+        const isElectron = Boolean((window as any).electronAPI) || ua.includes('electron');
+        setIsElectronRuntime(isElectron);
+    }, []);
+
+    useEffect(() => {
+        if (isElectronRuntime) return;
+
         const timer = setTimeout(() => {
             setCanShowFullscreenWarning(true);
         }, 3000);
         return () => clearTimeout(timer);
-    }, []);
+    }, [isElectronRuntime]);
 
     const { logEvent } = useElectronMonitoring(slug || '', user?.rollNumber || "2211981482");
+
+    const setElectronStrictMode = useCallback((enabled: boolean, reason?: string) => {
+        if (typeof window === 'undefined') return;
+
+        const bridge = (window as any).api;
+        if (!bridge || typeof bridge.sendToMain !== 'function') return;
+
+        if (electronStrictModeRef.current === enabled) return;
+
+        electronStrictModeRef.current = enabled;
+        try {
+            bridge.sendToMain('change-closeable-state', !enabled);
+            console.log(`[ExamPage] Electron strict mode ${enabled ? 'ENABLED' : 'DISABLED'}${reason ? ` (${reason})` : ''}`);
+        } catch (error) {
+            console.warn('[ExamPage] Failed to toggle Electron strict mode:', error);
+        }
+    }, []);
 
     const { videoRef, canvasRef, isModelLoaded } = useProctoringAI({
         active: !isLoading && !isSuccessMode && !isFeedbackMode && isAiProctoringEnabled && !isNotFound,
@@ -322,6 +351,15 @@ export default function PublicExamPage() {
                 setTabSwitchLimit(data.tabSwitchLimit || null);
                 setIsAiProctoringEnabled(data.aiProctoring || false);
 
+                const isElectronClient =
+                    typeof window !== 'undefined' &&
+                    (Boolean((window as any).electronAPI) || navigator.userAgent.toLowerCase().includes('electron'));
+
+                if (data.examMode === 'App' && !isElectronClient) {
+                    router.replace(`/exam/login?slug=${slug}&error=app_required`);
+                    return;
+                }
+
                 // 2. Start/Resume Session (Gatekeeper)
                 const session = await ExamService.startExam(
                     slug as string,
@@ -341,6 +379,7 @@ export default function PublicExamPage() {
 
                     // 2.1 Handle COMPLETED session (Resume success/feedback view)
                     if (session.status === 'COMPLETED') {
+                        setElectronStrictMode(false, 'session already completed');
                         setIsLoading(false);
                         const isFeedbackDoneLocal = localStorage.getItem(`exam_${slug}_feedback_done`) === 'true';
                         const isFeedbackDone = isFeedbackDoneLocal || session.feedbackDone === true;
@@ -361,6 +400,8 @@ export default function PublicExamPage() {
                         }
                         return; // Early return, don't load sections/questions
                     }
+
+                    setElectronStrictMode(true, 'exam session started');
 
                     // POPULATE DATA ONLY AFTER SUCCESSFUL SESSION START
                     if (data.sections) {
@@ -578,6 +619,10 @@ export default function PublicExamPage() {
                     window.location.href = `/exam/login?slug=${slug}&error=terminated`;
                     return; // Keep loading visible
                 }
+                if (error.message?.includes('APP_REQUIRED')) {
+                    window.location.href = `/exam/login?slug=${slug}&error=app_required`;
+                    return;
+                }
                 if (error.message?.includes('EXAM_ALREADY_ACTIVE')) {
                     window.location.href = `/exam/login?slug=${slug}&error=active_session`;
                     return; // Keep loading visible
@@ -604,7 +649,7 @@ export default function PublicExamPage() {
             }
         }
         loadExamData();
-    }, [slug]);
+    }, [slug, setElectronStrictMode]);
 
     const submitFullExam = useCallback(async () => {
         logEvent('exam_submission', 'User exam submitted (Manual or Auto)');
@@ -623,6 +668,7 @@ export default function PublicExamPage() {
 
             // Disconnect socket immediately
             disconnect();
+            setElectronStrictMode(false, 'exam submitted');
 
             setIsFeedbackMode(true);
         } catch (e) {
@@ -632,9 +678,10 @@ export default function PublicExamPage() {
             setFinalSubmitTime(submitTime);
             localStorage.setItem(`exam_${slug}_submit_time`, submitTime);
             disconnect();
+            setElectronStrictMode(false, 'exam submitted (fallback)');
             setIsFeedbackMode(true);
         }
-    }, [sessionId, logEvent, saveAnswer, warning, disconnect]);
+    }, [sessionId, logEvent, saveAnswer, warning, disconnect, setElectronStrictMode]);
 
     const handleFeedbackSubmit = useCallback(async (rating: number, comment: string) => {
         try {
@@ -645,6 +692,7 @@ export default function PublicExamPage() {
             if (typeof window !== 'undefined') {
                 localStorage.setItem(`exam_${slug}_feedback_done`, 'true');
             }
+            setElectronStrictMode(false, 'feedback submitted');
             setIsSuccessMode(true);
         } catch (e) {
             console.error("Feedback submission failed", e);
@@ -652,9 +700,10 @@ export default function PublicExamPage() {
             if (typeof window !== 'undefined') {
                 localStorage.setItem(`exam_${slug}_feedback_done`, 'true');
             }
+            setElectronStrictMode(false, 'feedback fallback');
             setIsSuccessMode(true);
         }
-    }, [user, slug, logEvent, info]);
+    }, [user, slug, logEvent, info, setElectronStrictMode]);
 
     // Timer Logic
     useEffect(() => {
@@ -925,6 +974,14 @@ export default function PublicExamPage() {
     useEffect(() => {
         console.log("[ExamPage] Fullscreen Monitoring Effect. Modes:", { isFeedbackMode, isSuccessMode, isLoading });
 
+        if (isElectronRuntime) {
+            if (fullscreenToastIdRef.current) {
+                dismiss(fullscreenToastIdRef.current);
+                fullscreenToastIdRef.current = null;
+            }
+            return;
+        }
+
         if (isFeedbackMode || isSuccessMode) {
             if (fullscreenToastIdRef.current) {
                 console.log("[ExamPage] Clearing fullscreen toast due to end-of-exam mode");
@@ -992,7 +1049,7 @@ export default function PublicExamPage() {
                 fullscreenToastIdRef.current = null;
             }
         };
-    }, [isFeedbackMode, isSuccessMode, warning, dismiss, canShowFullscreenWarning, isNotFound]);
+    }, [isFeedbackMode, isSuccessMode, warning, dismiss, canShowFullscreenWarning, isNotFound, isElectronRuntime]);
 
     // Auto-collapse sidebar if not hovered for 3s (initial load only)
     useEffect(() => {
@@ -1257,9 +1314,11 @@ export default function PublicExamPage() {
                     </div>
                 </div>
 
-                <button onClick={toggleFullscreen} className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl border border-slate-100 transition-all">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></svg>
-                </button>
+                {!isElectronRuntime && (
+                    <button onClick={toggleFullscreen} className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl border border-slate-100 transition-all">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></svg>
+                    </button>
+                )}
             </div>
         )
     };
@@ -1273,6 +1332,7 @@ export default function PublicExamPage() {
 
 
     const handleDoneSuccess = () => {
+        setElectronStrictMode(false, 'exit after success');
         window.location.href = "/dashboard/student";
     };
 

@@ -39,7 +39,7 @@ export class ExamService {
             // 1. Exam
             const exam = await this.prisma.exam.findUnique({
                 where: { slug },
-                select: { id: true, orgId: true, isActive: true, allowedIPs: true }
+                select: { id: true, orgId: true, isActive: true, allowedIPs: true, examMode: true }
             });
 
             if (exam) {
@@ -72,6 +72,14 @@ export class ExamService {
         }
 
         if (foundData) {
+            if (foundData.type === 'exam' && typeof foundData.examMode === 'undefined') {
+                const examModeRecord = await this.prisma.exam.findUnique({
+                    where: { id: foundData.id },
+                    select: { examMode: true }
+                });
+                foundData.examMode = examModeRecord?.examMode;
+            }
+
             if (foundData.isActive === false) throw new NotFoundException('Exam is not active');
             if (user && user.role !== 'SUPER_ADMIN' && foundData.orgId && foundData.orgId !== user.orgId) {
                 throw new NotFoundException('Access Denied');
@@ -169,7 +177,7 @@ export class ExamService {
 
         const exam = await this.prisma.exam.findUnique({
             where: { slug, isActive: true },
-            select: { title: true, startTime: true, duration: true, id: true, questions: true, totalMarks: true, allowedIPs: true }
+            select: { title: true, startTime: true, duration: true, id: true, questions: true, totalMarks: true, allowedIPs: true, examMode: true }
         });
 
         if (exam) {
@@ -211,6 +219,7 @@ export class ExamService {
                 title: exam.title,
                 startTime: exam.startTime,
                 duration: exam.duration,
+                examMode: exam.examMode || 'Browser',
                 totalSections: totalSections,
                 totalQuestions: totalQuestions,
                 totalMarks: exam.totalMarks || (totalQuestions * 1),

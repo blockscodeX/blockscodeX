@@ -9,6 +9,18 @@ import { Roles } from '../auth/roles.decorator';
 export class ExamController {
     constructor(private examService: ExamService) { }
 
+    private isAppClient(req: any): boolean {
+        const userAgent = String(req?.headers?.['user-agent'] || '').toLowerCase();
+        const clientPlatform = String(req?.headers?.['x-client-platform'] || '').toLowerCase();
+
+        return (
+            clientPlatform.includes('electron') ||
+            clientPlatform.includes('desktop') ||
+            clientPlatform.includes('app') ||
+            userAgent.includes('electron')
+        );
+    }
+
     private getClientIp(req: any): string {
         const forwardedFor = req?.headers?.['x-forwarded-for'];
         if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
@@ -77,6 +89,10 @@ export class ExamController {
 
         if (!lookup || lookup.type !== 'exam') {
             throw new BadRequestException('Assessment type does not support live sessions');
+        }
+
+        if (lookup.examMode === 'App' && !this.isAppClient(req)) {
+            throw new UnauthorizedException('APP_REQUIRED');
         }
 
         const ip = this.getClientIp(req);
