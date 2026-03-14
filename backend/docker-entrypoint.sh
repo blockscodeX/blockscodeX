@@ -6,6 +6,7 @@ echo "Preparing database migrations..."
 # Resolve any previously failed migration (fixes Prisma P3009 error).
 # This marks the failed migration as rolled-back so it can be re-applied cleanly.
 # Safe to run even when no failed migration exists — the command will simply exit.
+# NOTE: Once the migration has been successfully deployed, this line can be removed.
 npx prisma migrate resolve --rolled-back 20260314121000_add_bug_reports 2>/dev/null || true
 
 echo "Deploying database migrations..."
