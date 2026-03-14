@@ -123,6 +123,26 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
         setActiveSectionId(newSection.id);
     };
 
+    const renameSection = (sectionId: string, title: string) => {
+        setCourse(prev => {
+            if (activeTab === 'unit') {
+                return {
+                    ...prev,
+                    sections: prev.sections.map(s =>
+                        s.id === sectionId ? { ...s, title } : s
+                    )
+                };
+            }
+
+            return {
+                ...prev,
+                tests: (prev.tests || []).map(s =>
+                    s.id === sectionId ? { ...s, title } : s
+                )
+            };
+        });
+    };
+
     const addQuestion = (type: Question['type']) => {
         if (!activeSection) return;
         const newQuestion: Question = {
@@ -430,7 +450,18 @@ export default function CourseBuilder({ initialData, onDelete, onSave, basePath,
                                                 className={`group flex items-center gap-3 px-4 py-3 rounded-2xl cursor-pointer transition-all border ${activeSectionId === section.id ? 'bg-white border-[var(--brand-light)] shadow-md shadow-[var(--brand)]/5 text-slate-900' : 'bg-transparent border-transparent text-slate-500 hover:bg-white hover:border-slate-100 hover:shadow-sm'}`}
                                             >
                                                 <GripVertical size={14} className="text-slate-300 cursor-grab active:cursor-grabbing" />
-                                                <span className="text-xs font-black flex-1 truncate">{section.title}</span>
+                                                {activeSectionId === section.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={section.title}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onChange={(e) => renameSection(section.id, e.target.value)}
+                                                        placeholder={activeTab === 'unit' ? 'Section name' : 'Test name'}
+                                                        className="text-xs font-black flex-1 bg-transparent border-b border-transparent focus:border-[var(--brand-light)] outline-none text-slate-900"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-black flex-1 truncate">{section.title}</span>
+                                                )}
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); deleteSection(section.id); }}
                                                     className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all"

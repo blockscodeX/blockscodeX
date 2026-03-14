@@ -103,6 +103,15 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
         setActiveSectionId(newSection.id);
     };
 
+    const renameSection = (sectionId: string, title: string) => {
+        setExam(prev => ({
+            ...prev,
+            sections: prev.sections?.map(section =>
+                section.id === sectionId ? { ...section, title } : section
+            )
+        }));
+    };
+
     // Helper to format ISO datetime to a `datetime-local` compatible value (YYYY-MM-DDThh:mm)
     const formatDateTimeLocal = (iso?: string | undefined) => {
         if (!iso) return '';
@@ -363,7 +372,18 @@ export default function ExamBuilder({ initialData, onDelete, basePath, userRole,
                                                 className={`group flex items-center gap-3 px-4 py-3 rounded-2xl cursor-pointer transition-all border ${activeSectionId === section.id ? 'bg-white border-[var(--brand-light)] shadow-md shadow-[var(--brand)]/5 text-slate-900' : 'bg-transparent border-transparent text-slate-500 hover:bg-white hover:border-slate-100 hover:shadow-sm'}`}
                                             >
                                                 <GripVertical size={14} className="text-slate-300 cursor-grab active:cursor-grabbing" />
-                                                <span className="text-xs font-black flex-1 truncate">{section.title}</span>
+                                                {activeSectionId === section.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={section.title}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onChange={(e) => renameSection(section.id, e.target.value)}
+                                                        placeholder="Section name"
+                                                        className="text-xs font-black flex-1 bg-transparent border-b border-transparent focus:border-[var(--brand-light)] outline-none text-slate-900"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-black flex-1 truncate">{section.title}</span>
+                                                )}
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); deleteSection(section.id); }}
                                                     className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all"
