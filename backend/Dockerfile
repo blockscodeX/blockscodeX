@@ -29,9 +29,12 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
+# Copy and prepare the entrypoint script
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
+
 # Expose the API port
 EXPOSE 3000
 
-# Start command
-# Start command with automatic migrations
-CMD [ "sh", "-c", "npx prisma migrate deploy && npm run start:prod" ]
+# Start command with migration handling
+ENTRYPOINT ["./docker-entrypoint.sh"]
