@@ -10,6 +10,7 @@ export class SuperAdminService {
         private storageService: StorageService
     ) { }
 
+    
     async getStats() {
         const organizations = await this.prisma.organization.count();
         const totalUsers = await this.prisma.user.count();
