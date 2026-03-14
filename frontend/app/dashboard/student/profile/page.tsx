@@ -5,6 +5,7 @@ import Loading from "@/app/loading";
 import { AuthService } from "@/services/api/AuthService";
 import { useToast } from "@/app/components/Common/Toast";
 import { useRouter } from "next/navigation";
+import ReportProblemModal from "@/app/components/Common/ReportProblemModal";
 
 
 export default function ProfilePage() {
@@ -19,6 +20,7 @@ export default function ProfilePage() {
     const [avatar, setAvatar] = useState<string | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [removingAvatar, setRemovingAvatar] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Password State
@@ -205,6 +207,12 @@ export default function ProfilePage() {
                                     {userData?.department} Department
                                 </span>
                             )}
+                            <button
+                                onClick={() => setShowReportModal(true)}
+                                className="px-4 py-1.5 bg-amber-50 text-amber-700 text-[11px] font-black uppercase tracking-widest rounded-full border border-amber-100 hover:bg-amber-100 transition-colors"
+                            >
+                                Report a Problem
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -322,6 +330,11 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </main>
+
+            <ReportProblemModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+            />
         </div>
     );
 }

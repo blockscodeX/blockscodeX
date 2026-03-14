@@ -4,6 +4,7 @@ import Navbar from "@/app/components/Navbar";
 import { AuthService } from "@/services/api/AuthService";
 import { useToast } from "@/app/components/Common/Toast";
 import { useRouter } from "next/navigation";
+import ReportProblemModal from "@/app/components/Common/ReportProblemModal";
 
 export default function AdminProfilePage() {
     const [activeTab, setActiveTab] = useState<'general' | 'security'>('general');
@@ -16,6 +17,7 @@ export default function AdminProfilePage() {
     const [avatar, setAvatar] = useState<string | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [removingAvatar, setRemovingAvatar] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [currentPass, setCurrentPass] = useState("");
@@ -189,6 +191,12 @@ export default function AdminProfilePage() {
                                     {userData?.department} Department
                                 </span>
                             )}
+                            <button
+                                onClick={() => setShowReportModal(true)}
+                                className="px-4 py-1.5 bg-amber-50 text-amber-700 text-[11px] font-black uppercase tracking-widest rounded-full border border-amber-100 hover:bg-amber-100 transition-colors"
+                            >
+                                Report a Problem
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -303,6 +311,11 @@ export default function AdminProfilePage() {
                     </div>
                 </div>
             </main>
+
+            <ReportProblemModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+            />
         </div>
     );
 }

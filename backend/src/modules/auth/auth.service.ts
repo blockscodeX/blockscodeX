@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
@@ -332,5 +332,91 @@ export class AuthService {
         );
 
         return { success: true, message: 'If your email is registered, you will receive a password reset link.' };
+    }
+
+    private countWordsFromHtml(html: string): number {
+        if (!html) return 0;
+        const text = html
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!text) return 0;
+        return text.split(' ').filter(Boolean).length;
+    }
+
+    async uploadBugReportImage(
+        user: any,
+        fileData: any,
+        filename: string,
+        mimetype: string,
+        contentLength?: number
+    ) {
+        if (!user?.id) throw new UnauthorizedException('Invalid session');
+        if (!['STUDENT', 'TEACHER', 'ADMIN'].includes(user.role)) {
+            throw new ForbiddenException('Only students, teachers, and admins can report problems');
+        }
+
+        const url = await this.storageService.uploadFile(fileData, filename, mimetype, 'reported-bugs', contentLength);
+        return {
+            url,
+            name: filename,
+            type: mimetype,
+            size: contentLength || 0
+        };
+    }
+
+    async createBugReport(
+        user: any,
+        data: {
+            title: string;
+            description: string;
+            attachments?: { name: string; url: string; type: string; size: number }[];
+        }
+    ) {
+        if (!user?.id) throw new UnauthorizedException('Invalid session');
+        if (!['STUDENT', 'TEACHER', 'ADMIN'].includes(user.role)) {
+            throw new ForbiddenException('Only students, teachers, and admins can report problems');
+        }
+
+        const title = data?.title?.trim();
+        if (!title) throw new BadRequestException('Title is required');
+        if (title.length > 120) throw new BadRequestException('Title must be 120 characters or less');
+
+        const description = data?.description?.trim();
+        if (!description) throw new BadRequestException('Description is required');
+
+        const wordCount = this.countWordsFromHtml(description);
+        if (wordCount === 0) throw new BadRequestException('Description is required');
+        if (wordCount > 500) throw new BadRequestException('Description must be 500 words or less');
+
+        const attachments = Array.isArray(data.attachments) ? data.attachments : [];
+        if (attachments.length > 5) {
+            throw new BadRequestException('You can attach at most 5 images');
+        }
+
+        const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+        for (const file of attachments) {
+            if (!file?.url || !file?.name || !file?.type) {
+                throw new BadRequestException('Invalid attachment payload');
+            }
+            if (!allowedImageTypes.has(file.type)) {
+                throw new BadRequestException('Attachments must be image files only');
+            }
+            if (typeof file.size === 'number' && file.size > 5 * 1024 * 1024) {
+                throw new BadRequestException('Each image must be less than 5MB');
+            }
+        }
+
+        return this.prisma.bugReport.create({
+            data: {
+                title,
+                description,
+                attachments,
+                reporterRole: user.role,
+                reporterId: user.id,
+                orgId: user.orgId || null
+            }
+        });
     }
 }

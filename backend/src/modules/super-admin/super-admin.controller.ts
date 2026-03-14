@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, UseGuards, Param, Req, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, UseGuards, Param, Req, Query } from '@nestjs/common';
 import { SuperAdminService } from './super-admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -99,5 +99,24 @@ export class SuperAdminController {
     @Delete('users/:id')
     async deleteUser(@Param('id') id: string) {
         return this.superAdminService.deleteUser(id);
+    }
+
+    @Get('bug-reports')
+    async getBugReports(
+        @Query('status') status?: 'OPEN' | 'FIXED',
+        @Query('page') page: string = '1',
+        @Query('limit') limit: string = '20'
+    ) {
+        return this.superAdminService.getBugReports(status, Number(page), Number(limit));
+    }
+
+    @Patch('bug-reports/:id/fix')
+    async markBugReportFixed(@Param('id') id: string, @Req() req: any) {
+        return this.superAdminService.markBugReportFixed(id, req.user?.id);
+    }
+
+    @Delete('bug-reports/:id')
+    async deleteBugReport(@Param('id') id: string) {
+        return this.superAdminService.deleteBugReport(id);
     }
 }

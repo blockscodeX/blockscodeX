@@ -8,12 +8,16 @@ interface CourseDetailsViewProps {
     course: {
         title: string;
         slug: string;
-        studentsCount: number;
+        studentsCount?: number;
         status: string;
-        lastUpdated: string;
+        lastUpdated?: string;
+        updatedAt?: string;
         // Optional extended props
         teacher?: string;
         modules?: number;
+        _count?: {
+            students?: number;
+        };
     } | null;
     userRole?: 'admin' | 'teacher';
 }
@@ -22,6 +26,12 @@ export default function CourseDetailsView({ isOpen, onClose, course, userRole = 
     const [activeTab] = useState<'overview'>('overview');
 
     if (!isOpen || !course) return null;
+
+    const enrolledCount = Number(
+        course.studentsCount ?? course._count?.students ?? 0
+    );
+
+    const lastUpdatedLabel = course.lastUpdated || course.updatedAt || '-';
 
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
@@ -45,7 +55,7 @@ export default function CourseDetailsView({ isOpen, onClose, course, userRole = 
                                         {course.status}
                                     </span>
                                     <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                                        Last Updated {course.lastUpdated}
+                                        Last Updated {lastUpdatedLabel}
                                     </span>
                                 </div>
                             </div>
@@ -57,7 +67,7 @@ export default function CourseDetailsView({ isOpen, onClose, course, userRole = 
 
                     {/* Stats/Quick Actions */}
                     <div className="flex items-center gap-12 mb-8">
-                        <StatItem icon={<Users size={18} />} label="Enrolled" value={course.studentsCount.toString()} color="brand" />
+                        <StatItem icon={<Users size={18} />} label="Enrolled" value={String(enrolledCount)} color="brand" />
                         <StatItem icon={<BarChart3 size={18} />} label="Completion" value="78%" color="emerald" />
                         <StatItem icon={<Clock size={18} />} label="Avg. Time" value="12h 45m" color="amber" />
                     </div>

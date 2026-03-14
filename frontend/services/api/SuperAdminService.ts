@@ -152,5 +152,49 @@ export const SuperAdminService = {
             console.error('[SuperAdminService] Error', error);
             throw error;
         }
+    },
+
+    async getBugReports(params?: { status?: 'OPEN' | 'FIXED'; page?: number; limit?: number }) {
+        try {
+            const query = new URLSearchParams();
+            if (params?.status) query.set('status', params.status);
+            if (params?.page) query.set('page', String(params.page));
+            if (params?.limit) query.set('limit', String(params.limit));
+
+            const suffix = query.toString() ? `?${query.toString()}` : '';
+            const res = await authFetch(`/super-admin/bug-reports${suffix}`);
+            if (!res.ok) throw new Error('Failed to fetch bug reports');
+            return await res.json();
+        } catch (error) {
+            console.error('[SuperAdminService] Error', error);
+            throw error;
+        }
+    },
+
+    async markBugReportFixed(id: string) {
+        try {
+            const res = await authFetch(`/super-admin/bug-reports/${id}/fix`, {
+                method: 'PATCH',
+                body: JSON.stringify({})
+            });
+            if (!res.ok) throw new Error('Failed to mark bug report fixed');
+            return await res.json();
+        } catch (error) {
+            console.error('[SuperAdminService] Error', error);
+            throw error;
+        }
+    },
+
+    async deleteBugReport(id: string) {
+        try {
+            const res = await authFetch(`/super-admin/bug-reports/${id}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) throw new Error('Failed to delete bug report');
+            return await res.json();
+        } catch (error) {
+            console.error('[SuperAdminService] Error', error);
+            throw error;
+        }
     }
 };

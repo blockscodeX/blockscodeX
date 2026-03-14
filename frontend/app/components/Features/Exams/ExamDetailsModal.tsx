@@ -88,7 +88,9 @@ export default function ExamDetailsModal({ exam, onClose, userRole = 'teacher' }
                                 icon={<Target size={16} />}
                                 label="Test Code"
                                 value={exam.testCode}
-                                sub={exam.testCodeType}
+                                sub={exam.testCodeType === 'Rotating' && exam.rotationInterval
+                                    ? `Rotates every ${exam.rotationInterval} min`
+                                    : exam.testCodeType}
                                 brandTextClass={brandTextClass}
                             />
                             <SecurityPill

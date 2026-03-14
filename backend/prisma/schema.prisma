@@ -15,6 +15,11 @@ enum Role {
   SUPER_ADMIN
 }
 
+enum BugReportStatus {
+  OPEN
+  FIXED
+}
+
 model User {
   id         String  @id @default(uuid())
   email      String  @unique
@@ -58,6 +63,8 @@ model User {
   groupMemberships     StudentGroup[]  @relation("GroupStudents")
   teacherAnnouncements Announcement[]  @relation("TeacherAnnouncements")
   readAnnouncements    AnnouncementRead[]
+  bugReports           BugReport[]     @relation("UserBugReports")
+  fixedBugReports      BugReport[]     @relation("BugReportFixer")
 
   orgId        String?
   organization Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
@@ -336,6 +343,7 @@ model Organization {
   // Groups & Announcements
   studentGroups StudentGroup[]
   announcements Announcement[]
+  bugReports    BugReport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -458,4 +466,32 @@ model AnnouncementRead {
   @@unique([userId, announcementId])
   @@index([userId])
   @@index([announcementId])
+}
+
+model BugReport {
+  id               String          @id @default(uuid())
+  title            String
+  description      String // HTML from Tiptap rich text editor
+  status           BugReportStatus @default(OPEN)
+  attachments      Json            @default("[]") // Array of { name, url, type, size }
+  reporterRole     Role
+
+  reporterId String
+  reporter   User   @relation("UserBugReports", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  fixedById String?
+  fixedBy   User?   @relation("BugReportFixer", fields: [fixedById], references: [id], onDelete: SetNull)
+
+  orgId        String?
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+
+  fixedAt   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([orgId])
+  @@index([reporterId])
+  @@index([fixedById])
 }

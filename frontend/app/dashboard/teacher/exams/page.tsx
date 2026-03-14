@@ -19,17 +19,32 @@ export default function TeacherExamsPage() {
         const user = AuthService.getUser();
         setUserData(user);
 
-        async function load() {
+        let alive = true;
+
+        const load = async (showLoader = false) => {
+            if (showLoader) setLoading(true);
             try {
                 const data = await TeacherService.getExams();
+                if (!alive) return;
                 setExams(data);
+                setViewingExam((prev: any) => {
+                    if (!prev) return prev;
+                    return data.find((exam: any) => exam.id === prev.id) || prev;
+                });
             } catch (e) {
                 console.error(e);
             } finally {
-                setLoading(false);
+                if (showLoader && alive) setLoading(false);
             }
-        }
-        load();
+        };
+
+        load(true);
+        const interval = setInterval(() => load(false), 30 * 1000);
+
+        return () => {
+            alive = false;
+            clearInterval(interval);
+        };
     }, []);
 
     const orgPermissions = userData?.features || { canCreateExams: true };

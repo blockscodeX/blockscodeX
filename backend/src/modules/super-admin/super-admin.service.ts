@@ -1,10 +1,14 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../services/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { StorageService } from '../../services/storage/storage.service';
 
 @Injectable()
 export class SuperAdminService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private storageService: StorageService
+    ) { }
 
     async getStats() {
         const organizations = await this.prisma.organization.count();
@@ -232,5 +236,77 @@ export class SuperAdminService {
             console.error('[SuperAdminService] Delete Error Full:', error);
             throw new BadRequestException('Failed to delete organization. Dependencies may exist. ' + error.message);
         }
+    }
+
+    async getBugReports(status?: 'OPEN' | 'FIXED', page = 1, limit = 20) {
+        const safePage = Number.isFinite(page) && page > 0 ? page : 1;
+        const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20;
+        const skip = (safePage - 1) * safeLimit;
+
+        const where: any = {};
+        if (status === 'OPEN' || status === 'FIXED') {
+            where.status = status;
+        }
+
+        const [data, total] = await Promise.all([
+            this.prisma.bugReport.findMany({
+                where,
+                include: {
+                    reporter: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            role: true,
+                            department: true,
+                            organization: { select: { id: true, name: true } }
+                        }
+                    },
+                    fixedBy: {
+                        select: { id: true, name: true, email: true }
+                    }
+                },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: safeLimit
+            }),
+            this.prisma.bugReport.count({ where })
+        ]);
+
+        return {
+            data,
+            total,
+            page: safePage,
+            limit: safeLimit,
+            totalPages: Math.ceil(total / safeLimit)
+        };
+    }
+
+    async markBugReportFixed(id: string, fixedById?: string) {
+        const existing = await this.prisma.bugReport.findUnique({ where: { id } });
+        if (!existing) throw new NotFoundException('Bug report not found');
+
+        return this.prisma.bugReport.update({
+            where: { id },
+            data: {
+                status: 'FIXED',
+                fixedAt: new Date(),
+                fixedById: fixedById || null
+            }
+        });
+    }
+
+    async deleteBugReport(id: string) {
+        const existing = await this.prisma.bugReport.findUnique({ where: { id } });
+        if (!existing) throw new NotFoundException('Bug report not found');
+
+        const attachments = Array.isArray(existing.attachments) ? (existing.attachments as any[]) : [];
+        for (const att of attachments) {
+            if (att?.url) {
+                await this.storageService.deleteFile(att.url).catch(() => undefined);
+            }
+        }
+
+        return this.prisma.bugReport.delete({ where: { id } });
     }
 }

@@ -201,6 +201,44 @@ export const AuthService = {
         return await res.json();
     },
 
+    async uploadBugReportImage(file: File): Promise<{ url: string; name: string; type: string; size: number }> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(`${BASE_URL}/auth/bug-reports/upload-image`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData,
+        });
+
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.message || 'Failed to upload image');
+        }
+
+        return await res.json();
+    },
+
+    async createBugReport(data: {
+        title: string;
+        description: string;
+        attachments?: { name: string; url: string; type: string; size: number }[];
+    }): Promise<any> {
+        const res = await fetch(`${BASE_URL}/auth/bug-reports`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+
+        if (!res.ok) {
+            const error = await res.json().catch(() => ({}));
+            throw new Error(error.message || 'Failed to submit bug report');
+        }
+
+        return await res.json();
+    },
+
     getRole(): string | null {
         const user = this.getUser();
         return user?.role || null;

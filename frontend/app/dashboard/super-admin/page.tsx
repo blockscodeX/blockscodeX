@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/app/components/Navbar";
-import { Building2, Users, ShieldAlert, Globe, ArrowUpRight, Plus, Activity, Zap, Trash2 } from "lucide-react";
+import { Building2, Users, ShieldAlert, ArrowUpRight, Plus, Activity, Zap, Trash2, Bug, CheckCircle2, X, ArrowLeft, Download } from "lucide-react";
 import { SuperAdminService } from "@/services/api/SuperAdminService";
 import { requireAuthClient } from "@/hooks/requireAuthClient";
 import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
@@ -10,6 +10,11 @@ import DashboardSkeleton from "@/app/components/Skeletons/DashboardSkeleton";
 export default function SuperAdminDashboardPage() {
     const [statsData, setStatsData] = useState<any>(null);
     const [organizations, setOrganizations] = useState<any[]>([]);
+    const [bugReports, setBugReports] = useState<any[]>([]);
+    const [bugFilter, setBugFilter] = useState<'OPEN' | 'FIXED'>('OPEN');
+    const [selectedBug, setSelectedBug] = useState<any | null>(null);
+    const [selectedImage, setSelectedImage] = useState<{ url: string; name?: string } | null>(null);
+    const [loadingBugs, setLoadingBugs] = useState(true);
     const [loading, setLoading] = useState(true);
     const [authChecked, setAuthChecked] = useState(false);
 
@@ -29,6 +34,22 @@ export default function SuperAdminDashboardPage() {
         }
         load();
     }, []);
+
+    useEffect(() => {
+        if (!authChecked) return;
+        async function loadBugs() {
+            setLoadingBugs(true);
+            try {
+                const response = await SuperAdminService.getBugReports({ status: bugFilter, limit: 50 });
+                setBugReports(response?.data || []);
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoadingBugs(false);
+            }
+        }
+        loadBugs();
+    }, [authChecked, bugFilter]);
 
     const globalStats = [
         { label: "Total Organizations", value: statsData?.totalOrgs?.toString() || "0", change: "+2 this month", icon: <Building2 size={20} />, color: "bg-[var(--brand-light)] text-[var(--brand)]" },
@@ -133,7 +154,183 @@ export default function SuperAdminDashboardPage() {
                         </div>
                     </div>
                 </div>
+
+                <div className="mt-10 bg-white rounded-[40px] border border-slate-100 p-8 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                        <div>
+                            <h3 className="text-lg font-black text-slate-800 tracking-tight">Reported Bugs</h3>
+                            <p className="text-xs font-bold text-slate-400 mt-1">User-submitted issues from student, teacher, and organization admin profiles.</p>
+                        </div>
+                        <div className="flex items-center gap-2 p-1 bg-slate-50 rounded-xl">
+                            <button
+                                onClick={() => setBugFilter('OPEN')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${bugFilter === 'OPEN' ? 'bg-white text-[var(--brand)] border border-[var(--brand-light)]' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                Open
+                            </button>
+                            <button
+                                onClick={() => setBugFilter('FIXED')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${bugFilter === 'FIXED' ? 'bg-white text-emerald-600 border border-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                Fixed
+                            </button>
+                        </div>
+                    </div>
+
+                    {loadingBugs ? (
+                        <div className="space-y-3">
+                            {[1, 2].map((i) => (
+                                <div key={i} className="h-24 rounded-2xl bg-slate-50 animate-pulse" />
+                            ))}
+                        </div>
+                    ) : bugReports.length === 0 ? (
+                        <div className="text-center py-14 border border-dashed border-slate-200 rounded-3xl bg-slate-50/50">
+                            <Bug size={28} className="mx-auto text-slate-300 mb-3" />
+                            <p className="text-sm font-black text-slate-500">No {bugFilter === 'OPEN' ? 'open' : 'fixed'} bug reports</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {bugReports.map((bug) => {
+                                return (
+                                    <div key={bug.id} className="p-6 rounded-3xl border border-slate-100 hover:border-[var(--brand-light)] transition-all">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2 flex-wrap mb-2">
+                                                    <h4 className="text-sm font-black text-slate-800">{bug.title}</h4>
+                                                    <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${bug.status === 'FIXED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                                                        {bug.status}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] font-bold text-slate-400 mb-2">
+                                                    {bug.reporter?.name || 'Unknown'} • {bug.reporter?.role || bug.reporterRole} • {bug.reporter?.organization?.name || 'No org'}
+                                                </p>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Topic only • Open to view full report</p>
+                                            </div>
+
+                                            <div className="flex flex-col items-end gap-2 shrink-0">
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+                                                    {new Date(bug.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                </p>
+
+                                                <button
+                                                    onClick={() => setSelectedBug(bug)}
+                                                    className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors"
+                                                >
+                                                    View Full Bug
+                                                </button>
+
+                                                {bug.status !== 'FIXED' && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                await SuperAdminService.markBugReportFixed(bug.id);
+                                                                setBugReports((prev) => prev.map((b) => b.id === bug.id ? { ...b, status: 'FIXED', fixedAt: new Date().toISOString() } : b));
+                                                            } catch (error) {
+                                                                alert('Failed to mark as fixed');
+                                                            }
+                                                        }}
+                                                        className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <CheckCircle2 size={12} /> Mark Fixed
+                                                    </button>
+                                                )}
+
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!confirm('Delete this bug report?')) return;
+                                                        try {
+                                                            await SuperAdminService.deleteBugReport(bug.id);
+                                                            setBugReports((prev) => prev.filter((b) => b.id !== bug.id));
+                                                        } catch (error) {
+                                                            alert('Failed to delete bug report');
+                                                        }
+                                                    }}
+                                                    className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-colors flex items-center gap-1"
+                                                >
+                                                    <Trash2 size={12} /> Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </main>
+
+            {selectedBug && (
+                <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedBug(null)} />
+                    <div className="relative z-10 w-full max-w-4xl bg-white rounded-[36px] border border-slate-100 shadow-2xl p-8 max-h-[88vh] overflow-y-auto custom-scrollbar">
+                        <button
+                            onClick={() => setSelectedBug(null)}
+                            className="absolute top-5 right-5 w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-400 flex items-center justify-center"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        <div className="pr-12">
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                                <h3 className="text-xl font-black text-slate-900">{selectedBug.title}</h3>
+                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${selectedBug.status === 'FIXED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                                    {selectedBug.status}
+                                </span>
+                            </div>
+                            <p className="text-xs font-bold text-slate-400 mb-6">
+                                {selectedBug.reporter?.name || 'Unknown'} • {selectedBug.reporter?.role || selectedBug.reporterRole} • {selectedBug.reporter?.organization?.name || 'No org'} • {new Date(selectedBug.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            </p>
+                        </div>
+
+                        <div
+                            className="prose prose-slate max-w-none text-sm font-medium text-slate-700"
+                            dangerouslySetInnerHTML={{ __html: selectedBug.description }}
+                        />
+
+                        {Array.isArray(selectedBug.attachments) && selectedBug.attachments.length > 0 && (
+                            <div className="mt-8">
+                                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Attached Images</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {selectedBug.attachments.map((att: any, idx: number) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => setSelectedImage({ url: att.url, name: att.name || `Attachment ${idx + 1}` })}
+                                            className="relative rounded-xl overflow-hidden border border-slate-100 bg-slate-50 h-32 text-left"
+                                        >
+                                            <img src={att.url} alt={att.name || `Attachment ${idx + 1}`} className="w-full h-full object-cover" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {selectedImage && (
+                <div className="fixed inset-0 z-[1300] bg-slate-950/95 flex flex-col">
+                    <div className="flex items-center justify-between px-4 md:px-8 py-4 border-b border-white/10">
+                        <button
+                            onClick={() => setSelectedImage(null)}
+                            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-black uppercase tracking-widest flex items-center gap-2"
+                        >
+                            <ArrowLeft size={14} /> Back
+                        </button>
+                        <a
+                            href={selectedImage.url}
+                            download={selectedImage.name || 'bug-report-image'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-dark)] text-white text-xs font-black uppercase tracking-widest flex items-center gap-2"
+                        >
+                            <Download size={14} /> Download
+                        </a>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center p-4 md:p-8">
+                        <img src={selectedImage.url} alt={selectedImage.name || 'Bug attachment'} className="max-h-full max-w-full object-contain" />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

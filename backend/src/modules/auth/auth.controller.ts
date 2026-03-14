@@ -11,6 +11,7 @@ import { StorageService } from '../../services/storage/storage.service';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const BUG_ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 @Controller('auth')
 export class AuthController {
@@ -114,5 +115,57 @@ export class AuthController {
     @Patch('change-password')
     async changePassword(@User() user: any, @Body() data: { currentPass: string; newPass: string }) {
         return this.authService.changePassword(user.id, data);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Post('bug-reports/upload-image')
+    @Throttle({ default: { limit: 10, ttl: 60000 } })
+    async uploadBugReportImage(@User() user: any, @Req() req: FastifyRequest) {
+        const multipartReq = req as any;
+
+        if (!multipartReq.isMultipart()) {
+            throw new BadRequestException('Request must be multipart/form-data');
+        }
+
+        const parts = multipartReq.parts();
+        for await (const part of parts) {
+            if (part.type === 'file' && part.fieldname === 'file') {
+                const buffer = await part.toBuffer();
+
+                if (buffer.length > MAX_FILE_SIZE) {
+                    throw new BadRequestException('Each image must be less than 5MB');
+                }
+                if (!BUG_ALLOWED_IMAGE_TYPES.includes(part.mimetype)) {
+                    throw new BadRequestException('Only image files are allowed (JPEG, PNG, WebP, GIF)');
+                }
+
+                const uploaded = await this.authService.uploadBugReportImage(
+                    user,
+                    buffer,
+                    part.filename,
+                    part.mimetype,
+                    buffer.length
+                );
+                return uploaded;
+            } else if (part.type === 'file') {
+                await part.toBuffer();
+            }
+        }
+
+        throw new BadRequestException('No image file provided');
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Post('bug-reports')
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    async createBugReport(
+        @User() user: any,
+        @Body() body: {
+            title: string;
+            description: string;
+            attachments?: { name: string; url: string; type: string; size: number }[];
+        }
+    ) {
+        return this.authService.createBugReport(user, body);
     }
 }

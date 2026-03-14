@@ -39,21 +39,36 @@ export default function AdminExamsView({ basePath = '/dashboard/admin', organiza
         const user = AuthService.getUser();
         setUserData(user);
 
-        async function load() {
+        let alive = true;
+
+        async function load(showLoader = false) {
+            if (showLoader) setLoading(true);
             try {
                 const [ex, cr] = await Promise.all([
                     AdminService.getExams(organizationId),
                     AdminService.getCourses(organizationId)
                 ]);
+                if (!alive) return;
                 setExams(ex);
                 setCourses(cr);
+                setViewingExam((prev: any) => {
+                    if (!prev) return prev;
+                    return ex.find((exam: any) => exam.id === prev.id) || prev;
+                });
             } catch (e) {
                 console.error(e);
             } finally {
-                setLoading(false);
+                if (showLoader && alive) setLoading(false);
             }
         }
-        load();
+
+        load(true);
+        const interval = setInterval(() => load(false), 30 * 1000);
+
+        return () => {
+            alive = false;
+            clearInterval(interval);
+        };
     }, [organizationId]);
 
     const orgPermissions = userData?.features || { canCreateExams: true, canCreateCourses: true, allowCourseTests: true };
