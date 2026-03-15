@@ -898,9 +898,19 @@ export class TeacherService {
         };
     }
 
-    async getCourses(userId: string) {
+    async getCourses(user: any) {
+        const where: any = {};
+
+        if (typeof user === 'string') {
+            where.creatorId = user;
+        } else if (user?.role === 'ADMIN') {
+            where.orgId = user.orgId;
+        } else {
+            where.creatorId = user?.id;
+        }
+
         return this.prisma.course.findMany({
-            where: { creatorId: userId },
+            where,
             include: {
                 _count: { select: { modules: true, students: true } }
             },
