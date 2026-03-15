@@ -4,14 +4,15 @@ import { CodeExecutionService } from './code-execution.service';
 import { PistonStrategy } from './strategies/piston.strategy';
 import { Judge0Strategy } from './strategies/judge0.strategy';
 import { HttpModule } from '@nestjs/axios';
-import { PrismaService } from '../../services/prisma/prisma.service';
 import { BullModule } from '@nestjs/bullmq';
 import { CodeExecutionProcessor } from './code-execution.processor';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PrismaModule } from '../../services/prisma/prisma.module';
 
 @Module({
     imports: [
         HttpModule,
+        PrismaModule,
         BullModule.registerQueue({
             name: 'code-execution',
         }),
@@ -22,7 +23,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         CodeExecutionProcessor,
         PistonStrategy,
         Judge0Strategy,
-        PrismaService,
         {
             provide: 'IExecutionStrategy', // Use string token for interface injection
             useFactory: (configService: ConfigService, pistonStrategy: PistonStrategy, judge0Strategy: Judge0Strategy) => {
