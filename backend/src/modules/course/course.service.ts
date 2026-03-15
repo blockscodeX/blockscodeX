@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../services/prisma/prisma.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import {
+    sanitizeQuestionForClient,
+    sanitizeQuestionsPayloadForClient,
+    shouldSanitizeSensitiveContent
+} from '../common/testcase-visibility.util';
 
 @Injectable()
 export class CourseService {
@@ -72,7 +77,17 @@ export class CourseService {
             }
         }
 
-        return course;
+        if (!shouldSanitizeSensitiveContent(user)) {
+            return course;
+        }
+
+        return {
+            ...course,
+            tests: (course.tests || []).map((test: any) => ({
+                ...test,
+                questions: sanitizeQuestionsPayloadForClient(test.questions, false)
+            }))
+        };
     }
 
     // Invalidated cache for courses/units/tests whenever they are updated
@@ -100,7 +115,11 @@ export class CourseService {
                         throw new NotFoundException('Unit not found');
                     }
                 }
-                return data;
+                if (!shouldSanitizeSensitiveContent(user)) {
+                    return data;
+                }
+
+                return this.sanitizeUnitResponse(data);
             }
         }
 
@@ -132,7 +151,11 @@ export class CourseService {
                     throw new NotFoundException('Unit not found');
                 }
             }
-            return unit;
+            if (!shouldSanitizeSensitiveContent(user)) {
+                return unit;
+            }
+
+            return this.sanitizeUnitResponse(unit);
         }
 
         // 2. If Unit NOT found, look in CourseTests
@@ -260,13 +283,33 @@ export class CourseService {
                     throw new NotFoundException('Unit not found');
                 }
             }
-            return responseData;
+            if (!shouldSanitizeSensitiveContent(user)) {
+                return responseData;
+            }
+
+            return this.sanitizeUnitResponse(responseData);
         }
 
         // Explicitly simplified the loop replacement for brevity in this tool call, 
         // sticking to replacing the block effectively.
 
         throw new NotFoundException('Unit not found');
+    }
+
+    private sanitizeUnitResponse(data: any) {
+        if (!data || typeof data !== 'object') {
+            return data;
+        }
+
+        const sanitized: any = {
+            ...data
+        };
+
+        if (sanitized.content && typeof sanitized.content === 'object') {
+            sanitized.content = sanitizeQuestionForClient(sanitized.content, false);
+        }
+
+        return sanitizeQuestionForClient(sanitized, false);
     }
 
 

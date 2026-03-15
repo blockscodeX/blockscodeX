@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, UnauthorizedException
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 import { PrismaService } from '../../services/prisma/prisma.service';
+import { sanitizeQuestionForClient, shouldSanitizeSensitiveContent } from '../common/testcase-visibility.util';
 
 @Injectable()
 export class ExamService {
@@ -104,7 +105,7 @@ export class ExamService {
                     throw new NotFoundException('Assessment not found or access denied');
                 }
             }
-            return this.transformExam(entity);
+            return this.transformExam(entity, !shouldSanitizeSensitiveContent(user));
         }
 
         // 1. Try finding all at once using Promise.all to reduce latency
@@ -137,7 +138,7 @@ export class ExamService {
                     throw new NotFoundException('Assessment not found or access denied');
                 }
             }
-            return this.transformExam(exam);
+            return this.transformExam(exam, !shouldSanitizeSensitiveContent(user));
         }
 
         if (courseTest) {
@@ -153,7 +154,7 @@ export class ExamService {
             }
 
             console.log('Found CourseTest:', JSON.stringify(courseTest, null, 2));
-            const transformed = this.transformCourseTest(courseTest);
+            const transformed = this.transformCourseTest(courseTest, !shouldSanitizeSensitiveContent(user));
             // Add startTime for frontend timer calculation
             (transformed as any).startTime = courseTest.startDate || courseTest.createdAt;
             return transformed;
@@ -166,7 +167,7 @@ export class ExamService {
                     throw new NotFoundException('Assessment not found');
                 }
             }
-            return this.transformCourse(course);
+            return this.transformCourse(course, !shouldSanitizeSensitiveContent(user));
         }
 
         throw new NotFoundException('Assessment not found');
@@ -282,7 +283,7 @@ export class ExamService {
         return 'MCQ'; // Default fallback
     }
 
-    public transformExam(exam: any) {
+    public transformExam(exam: any, includeSensitive: boolean = true) {
         const questionsMap: Record<string, any> = {};
         const finalSections: any[] = [];
 
@@ -305,7 +306,7 @@ export class ExamService {
                 webConfig: q.webConfig || q.web,
                 readingContent: q.readingContent || q.readingConfig?.contentBlocks || q.readingConfig
             };
-            questionsMap[qId] = normalizedQ;
+                questionsMap[qId] = sanitizeQuestionForClient(normalizedQ, includeSensitive);
             return qId;
         };
 
@@ -391,7 +392,7 @@ export class ExamService {
         };
     }
 
-    public transformCourseTest(test: any) {
+    public transformCourseTest(test: any, includeSensitive: boolean = true) {
         // Course Tests are already stored with 'questions' which is the sections JSON
         const questionsData = test.questions as any;
         // Handle both: arrays (sections list) or object with sections key
@@ -417,9 +418,11 @@ export class ExamService {
                     readingContent: q.readingContent || q.readingConfig?.contentBlocks || q.readingConfig
                 };
 
+                const safeQ = sanitizeQuestionForClient(normalizedQ, includeSensitive);
+
                 // Ensure map gets the full object
-                questionsMap[q.id] = normalizedQ;
-                return normalizedQ;
+                questionsMap[q.id] = safeQ;
+                return safeQ;
             })
         }));
 
@@ -446,7 +449,7 @@ export class ExamService {
         };
     }
 
-    public transformCourse(course: any) {
+    public transformCourse(course: any, includeSensitive: boolean = true) {
         const questionsMap: Record<string, any> = {};
         const sections = course.modules.map((m: any, mIdx: number) => {
             const questions = m.units.map((u: any, uIdx: number) => {
@@ -455,12 +458,13 @@ export class ExamService {
                 const unitContent = u.content as any;
                 const normalizedType = this.normalizeType(u.type);
 
-                questionsMap[qId] = {
+                const normalizedUnit = {
                     ...unitContent,
                     id: qId,
                     title: u.title,
                     type: normalizedType
                 };
+                questionsMap[qId] = sanitizeQuestionForClient(normalizedUnit, includeSensitive);
                 return { id: qId, status: 'unanswered', number: uIdx + 1 };
             });
 

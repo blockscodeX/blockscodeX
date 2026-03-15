@@ -64,11 +64,18 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
 
     const stats = useMemo(() => {
         if (serverStats) {
+            const derivedPassedCount = results.filter(r => String(r.status).toLowerCase() === 'passed').length;
+            const derivedFailedCount = results.filter(r => String(r.status).toLowerCase() === 'failed').length;
+
+            const serverPassedCount = serverStats.passedCount || 0;
+            const serverFailedCount = serverStats.failedCount || 0;
+            const hasServerPassFail = (serverPassedCount + serverFailedCount) > 0;
+
             return {
                 avgScore: serverStats.avgScore || 0,
                 avgTime: 0, // Not passed from backend yet, keeping 0/hidden
-                passedCount: serverStats.passedCount || 0,
-                failedCount: serverStats.failedCount || 0,
+                passedCount: hasServerPassFail ? serverPassedCount : derivedPassedCount,
+                failedCount: hasServerPassFail ? serverFailedCount : derivedFailedCount,
                 distribution: serverStats.distribution || [],
                 highScore: serverStats.highScore || 0
             };
@@ -100,15 +107,25 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
 
     const brandColor = '#fc751b';
     const brandLightColor = 'var(--brand-light)';
+    const passedColor = '#10b981';
+    const failedColor = '#f43f5e';
+    const neutralColor = '#cbd5e1';
 
-    const pieData = results.length > 0
-        ? [
-            { name: 'Passed', value: stats.passedCount, color: brandColor },
-            { name: 'Failed', value: stats.failedCount, color: '#f43f5e' },
-        ]
-        : [
-            { name: 'No Data', value: 1, color: '#f1f5f9' }
-        ];
+    const hasResults = results.length > 0;
+    const classifiedCount = (stats.passedCount || 0) + (stats.failedCount || 0);
+
+    const pieData = !hasResults
+        ? [{ name: 'No Data', value: 1, color: neutralColor }]
+        : classifiedCount > 0
+            ? [
+                { name: 'Passed', value: stats.passedCount || 0, color: passedColor },
+                { name: 'Failed', value: stats.failedCount || 0, color: failedColor },
+            ]
+            : [{ name: 'Pending', value: results.length, color: neutralColor }];
+
+    const pieChartData = pieData.filter(segment => segment.value > 0);
+    const piePaddingAngle = pieChartData.length > 1 ? 8 : 0;
+    const pieMinAngle = pieChartData.length > 1 ? 4 : 0;
 
     const handlePublish = async () => {
         setIsPublishing(true);
@@ -189,8 +206,16 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
                         <div className="h-40 w-full relative">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie data={pieData} innerRadius={50} outerRadius={70} paddingAngle={results.length > 0 ? 8 : 0} dataKey="value" isAnimationActive={results.length > 0}>
-                                        {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}
+                                    <Pie
+                                        data={pieChartData}
+                                        innerRadius={50}
+                                        outerRadius={70}
+                                        paddingAngle={piePaddingAngle}
+                                        minAngle={pieMinAngle}
+                                        dataKey="value"
+                                        isAnimationActive={hasResults}
+                                    >
+                                        {pieChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}
                                     </Pie>
                                 </PieChart>
                             </ResponsiveContainer>
@@ -200,8 +225,8 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
                             </div>
                         </div>
                         <div className="mt-4 flex justify-center gap-6">
-                            <MetricLabel color={brandColor} label="Pass" value={stats.passedCount} />
-                            <MetricLabel color="#f43f5e" label="Fail" value={stats.failedCount} />
+                            <MetricLabel color={passedColor} label="Pass" value={stats.passedCount} />
+                            <MetricLabel color={failedColor} label="Fail" value={stats.failedCount} />
                         </div>
                     </div>
 
@@ -344,7 +369,7 @@ export default function ExamResultsView({ title = "Exam Analysis", examId, userR
                                             </div>
                                         </td>
                                         <td className="px-4 py-5 text-center">
-                                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${r.status === 'Passed' ? 'bg-[var(--brand-light)] text-[var(--brand)]' : 'bg-rose-50 text-rose-600'}`}>
+                                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${r.status === 'Passed' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                                                 {r.status}
                                             </span>
                                         </td>

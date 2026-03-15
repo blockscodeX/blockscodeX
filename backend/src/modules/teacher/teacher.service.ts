@@ -169,19 +169,139 @@ export class TeacherService {
             include: {
                 _count: {
                     select: { students: true }
+                },
+                students: {
+                    select: { id: true }
+                },
+                modules: {
+                    select: {
+                        units: {
+                            select: { id: true }
+                        }
+                    }
+                },
+                progress: {
+                    select: {
+                        userId: true,
+                        percent: true
+                    }
                 }
             },
             orderBy: { updatedAt: 'desc' }
         });
 
+        const allUnitIds = courses.flatMap((course: any) =>
+            (course.modules || []).flatMap((module: any) => (module.units || []).map((unit: any) => unit.id))
+        );
+
+        const uniqueUnitIds = [...new Set(allUnitIds)];
+
+        const completedSubmissions = uniqueUnitIds.length > 0
+            ? await this.prisma.unitSubmission.findMany({
+                where: {
+                    status: 'COMPLETED',
+                    unitId: { in: uniqueUnitIds }
+                },
+                select: {
+                    unitId: true,
+                    userId: true,
+                    createdAt: true,
+                    updatedAt: true
+                }
+            })
+            : [];
+
+        const completedByCourseAndUser = new Map<string, Set<string>>();
+        const durationByCourse = new Map<string, { totalMinutes: number; count: number }>();
+
+        const unitToCourse = new Map<string, string>();
+        for (const course of courses as any[]) {
+            for (const module of course.modules || []) {
+                for (const unit of module.units || []) {
+                    unitToCourse.set(unit.id, course.id);
+                }
+            }
+        }
+
+        for (const sub of completedSubmissions as any[]) {
+            const courseId = unitToCourse.get(sub.unitId);
+            if (!courseId) continue;
+
+            const completionKey = `${courseId}:${sub.userId}`;
+            if (!completedByCourseAndUser.has(completionKey)) {
+                completedByCourseAndUser.set(completionKey, new Set<string>());
+            }
+            completedByCourseAndUser.get(completionKey)!.add(sub.unitId);
+
+            const diffMs = new Date(sub.updatedAt).getTime() - new Date(sub.createdAt).getTime();
+            const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+            const current = durationByCourse.get(courseId) || { totalMinutes: 0, count: 0 };
+            current.totalMinutes += diffMinutes;
+            current.count += 1;
+            durationByCourse.set(courseId, current);
+        }
+
         return courses.map((c: any) => ({
+            ...(() => {
+                const unitIds = (c.modules || []).flatMap((m: any) => (m.units || []).map((u: any) => u.id));
+                const totalUnits = unitIds.length;
+
+                let completionPercent = 0;
+
+                if (c._count.students > 0 && totalUnits > 0) {
+                    const progressByUser = new Map<string, number>();
+                    for (const p of c.progress || []) {
+                        progressByUser.set(p.userId, p.percent || 0);
+                    }
+
+                    const hasProgressForEnrolled = c.students.some((s: any) => progressByUser.has(s.id));
+
+                    if (hasProgressForEnrolled) {
+                        const totalPercent = c.students.reduce((acc: number, s: any) => acc + (progressByUser.get(s.id) || 0), 0);
+                        completionPercent = Math.round(totalPercent / c._count.students);
+                    } else {
+                        let totalPercent = 0;
+                        for (const student of c.students || []) {
+                            const key = `${c.id}:${student.id}`;
+                            const completedCount = completedByCourseAndUser.get(key)?.size || 0;
+                            totalPercent += (completedCount / totalUnits) * 100;
+                        }
+                        completionPercent = Math.round(totalPercent / c._count.students);
+                    }
+                }
+
+                const duration = durationByCourse.get(c.id);
+                const avgTimeMinutes = duration && duration.count > 0
+                    ? Math.round(duration.totalMinutes / duration.count)
+                    : 0;
+
+                return {
+                    completion: completionPercent,
+                    avgTimeMinutes,
+                    avgTimeLabel: this.formatMinutes(avgTimeMinutes)
+                };
+            })(),
             id: c.id,
             title: c.title,
             slug: c.slug,
             students: c._count.students,
             status: c.status,
-            lastUpdated: c.updatedAt.toLocaleDateString()
+            lastUpdated: c.updatedAt.toLocaleDateString(),
+            shortDescription: c.shortDescription || '',
+            longDescription: c.longDescription || '',
+            courseSummary: c.courseSummary || ''
         }));
+    }
+
+    private formatMinutes(totalMinutes: number): string {
+        if (!totalMinutes || totalMinutes <= 0) return '0m';
+
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        if (hours === 0) return `${minutes}m`;
+        if (minutes === 0) return `${hours}h`;
+        return `${hours}h ${minutes}m`;
     }
 
     async getStudents(user: any) {

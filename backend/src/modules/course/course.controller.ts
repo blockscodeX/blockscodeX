@@ -18,7 +18,7 @@ export class CourseController {
 
     @Get(':slug')
     // OPTIMIZATION: Cache course structure for 60s to reduce DB load on frequent navigation
-    @Header('Cache-Control', 'public, max-age=60')
+    @Header('Cache-Control', 'private, max-age=60')
     async getCourse(@Param('slug') slug: string, @User() user: any) {
         return this.courseService.getCourse(slug, user);
     }

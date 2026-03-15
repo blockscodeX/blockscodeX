@@ -12,6 +12,12 @@ interface CourseDetailsViewProps {
         status: string;
         lastUpdated?: string;
         updatedAt?: string;
+        shortDescription?: string;
+        longDescription?: string;
+        courseSummary?: string;
+        completion?: number;
+        avgTimeMinutes?: number;
+        avgTimeLabel?: string;
         // Optional extended props
         teacher?: string;
         modules?: number;
@@ -32,6 +38,9 @@ export default function CourseDetailsView({ isOpen, onClose, course, userRole = 
     );
 
     const lastUpdatedLabel = course.lastUpdated || course.updatedAt || '-';
+    const descriptionText = getCourseDescription(course);
+    const completionLabel = typeof course.completion === 'number' ? `${course.completion}%` : '-';
+    const avgTimeLabel = course.avgTimeLabel || (typeof course.avgTimeMinutes === 'number' ? formatMinutes(course.avgTimeMinutes) : '-');
 
     return (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
@@ -68,8 +77,8 @@ export default function CourseDetailsView({ isOpen, onClose, course, userRole = 
                     {/* Stats/Quick Actions */}
                     <div className="flex items-center gap-12 mb-8">
                         <StatItem icon={<Users size={18} />} label="Enrolled" value={String(enrolledCount)} color="brand" />
-                        <StatItem icon={<BarChart3 size={18} />} label="Completion" value="78%" color="emerald" />
-                        <StatItem icon={<Clock size={18} />} label="Avg. Time" value="12h 45m" color="amber" />
+                        <StatItem icon={<BarChart3 size={18} />} label="Completion" value={completionLabel} color="emerald" />
+                        <StatItem icon={<Clock size={18} />} label="Avg. Time" value={avgTimeLabel} color="amber" />
                     </div>
 
                 </div>
@@ -78,9 +87,11 @@ export default function CourseDetailsView({ isOpen, onClose, course, userRole = 
                 <div className="flex-1 overflow-y-auto p-10 bg-slate-50/30">
                     {activeTab === 'overview' ? (
                         <div className="space-y-8 animate-fade-in">
-                            <div className="grid grid-cols-2 gap-6">
-                                <InfoCard title="Module Description" content="This comprehensive module covers the full spectrum of full-stack development, from modern frontend frameworks like React to robust backend architectures with Node.js and SQL." />
-                                <InfoCard title="Technical Stack" content="React, Node.js, Express, MySQL, TailwindCSS, TypeScript" />
+                            <div className="grid grid-cols-1 gap-6">
+                                <InfoCard
+                                    title="Course Description"
+                                    content={descriptionText || 'No description available for this course.'}
+                                />
                             </div>
                         </div>
                     ) : (
@@ -97,6 +108,47 @@ export default function CourseDetailsView({ isOpen, onClose, course, userRole = 
             `}</style>
         </div>
     );
+}
+
+function getCourseDescription(course: any): string {
+    const candidates = [
+        course?.longDescription,
+        course?.shortDescription,
+        course?.courseSummary
+    ];
+
+    for (const candidate of candidates) {
+        const cleaned = sanitizeText(candidate);
+        if (cleaned) return cleaned;
+    }
+
+    return '';
+}
+
+function sanitizeText(value: unknown): string {
+    if (!value || typeof value !== 'string') return '';
+
+    const withoutTags = value
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    return withoutTags;
+}
+
+function formatMinutes(totalMinutes: number): string {
+    if (!totalMinutes || totalMinutes <= 0) return '0m';
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours === 0) return `${minutes}m`;
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h ${minutes}m`;
 }
 
 function StatItem({ icon, label, value, color }: { icon: any, label: string, value: string, color: 'brand' | 'emerald' | 'amber' }) {

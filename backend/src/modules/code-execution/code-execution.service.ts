@@ -47,9 +47,7 @@ export class CodeExecutionService {
     async submitCode(unitId: string, language: string, code: string, examId?: string, testCasesBody?: any[]) {
         let testCases: any[] = [];
 
-        if (testCasesBody && Array.isArray(testCasesBody)) {
-            testCases = testCasesBody;
-        } else if (examId) {
+        if (examId) {
             // PERFORMANCE: Cache exam questions to avoid fetching large JSON blobs on every run
             const cacheKey = `exam:questions:${examId}`;
             const cachedQuestions = await this.redis.get(cacheKey);
@@ -134,20 +132,23 @@ export class CodeExecutionService {
             testCases = foundQuestion.testCases || foundQuestion.codingConfig?.testCases || [];
 
         } else {
-            // 1. Fetch the unit and its test cases
+            // 1. Fetch authoritative unit test cases first
             const unit = await this.prisma.unit.findUnique({
                 where: { id: unitId },
             });
 
-            if (!unit) {
+            if (unit) {
+                // Assuming unit.content follows a structure suitable for coding problems
+                // generic casting, in a real app we'd want strict DTOs/Validation
+                const content: any = unit.content;
+                // Check for testCases in content root OR in codingConfig (if structure differs)
+                testCases = content.testCases || content.codingConfig?.testCases || [];
+            } else if (testCasesBody && Array.isArray(testCasesBody)) {
+                // Fallback for preview/authoring flows where question is not persisted yet
+                testCases = testCasesBody;
+            } else {
                 throw new NotFoundException('Unit not found');
             }
-
-            // Assuming unit.content follows a structure suitable for coding problems
-            // generic casting, in a real app we'd want strict DTOs/Validation
-            const content: any = unit.content;
-            // Check for testCases in content root OR in codingConfig (if structure differs)
-            testCases = content.testCases || content.codingConfig?.testCases || [];
         }
 
         if (!testCases.length) {
