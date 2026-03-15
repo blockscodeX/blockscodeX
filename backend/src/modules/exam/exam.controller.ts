@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../auth/user.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { toExamEnterResponseDto, toStudentExamResponseDto } from './dto/exam-response.dto';
 
 @Controller('exam')
 export class ExamController {
@@ -44,6 +45,10 @@ export class ExamController {
     @UseGuards(JwtAuthGuard)
     async getExam(@Param('slug') slug: string, @Query('json') json: string, @User() user: any) {
         const exam = await this.examService.getExamBySlug(slug, user);
+        const isStudent = String(user?.role || '').toUpperCase() === 'STUDENT';
+        if (isStudent) {
+            return toStudentExamResponseDto(exam);
+        }
         if (json) {
             return exam;
         }
@@ -111,11 +116,9 @@ export class ExamController {
             }
         }
 
-        return {
-            exam: await this.examService.getExamBySlug(slug, user),
-            session: await this.examService.startSession(user.id, lookup.id, ip, body.deviceId, body.tabId, body.metadata),
-            status: 'ready'
-        };
+        const session = await this.examService.startSession(user.id, lookup.id, ip, body.deviceId, body.tabId, body.metadata);
+
+        return toExamEnterResponseDto(session);
     }
 
     @Post()

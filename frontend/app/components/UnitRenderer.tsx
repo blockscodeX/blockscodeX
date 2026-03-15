@@ -273,7 +273,7 @@ export function UnitRendererComponent({
 
                             <div className="w-16 h-1.5 bg-[var(--brand)] rounded-full mb-12"></div>
 
-                            <article className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-6 prose-p:text-slate-600 prose-headings:text-slate-800 prose-code:text-[var(--brand-dark)] prose-code:bg-[var(--brand-lighter)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-sm"
+                            <article className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-6 prose-p:text-slate-600 prose-headings:text-slate-800 prose-code:text-[var(--brand-dark)] prose-code:bg-[var(--brand-lighter)] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-sm [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-inherit [&_pre_code]:before:content-none [&_pre_code]:after:content-none"
                                 style={{ fontSize: contentFontSize ? `${contentFontSize}px` : undefined }}
                             >
                                 <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(question.description, purifyConfig) }} />

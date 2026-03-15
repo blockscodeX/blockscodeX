@@ -3,6 +3,7 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 import { PrismaService } from '../../services/prisma/prisma.service';
 import { sanitizeQuestionForClient, shouldSanitizeSensitiveContent } from '../common/testcase-visibility.util';
+import { toStudentExamResponseDto } from './dto/exam-response.dto';
 
 @Injectable()
 export class ExamService {
@@ -385,11 +386,17 @@ export class ExamService {
             });
         }
 
-        return {
+        const transformed = {
             ...exam,
             sections: finalSections,
             questions: questionsMap
         };
+
+        if (!includeSensitive) {
+            return toStudentExamResponseDto(transformed);
+        }
+
+        return transformed;
     }
 
     public transformCourseTest(test: any, includeSensitive: boolean = true) {

@@ -1,7 +1,15 @@
 const HIDDEN_TESTCASE_PLACEHOLDER = null;
+const SENSITIVE_QUESTION_KEYS = [
+    'correctAnswer',
+    'correctAnswers',
+    'correctOptionId',
+    'correctOptionIds',
+    'answerKey',
+    'isCorrect'
+];
 
 export function shouldSanitizeSensitiveContent(user?: any): boolean {
-    return user?.role === 'STUDENT';
+    return String(user?.role || '').toUpperCase() === 'STUDENT';
 }
 
 export function sanitizeCodingConfigForClient(codingConfig: any, includeSensitive: boolean): any {
@@ -50,6 +58,27 @@ export function sanitizeQuestionForClient(question: any, includeSensitive: boole
     const sanitized: any = {
         ...question
     };
+
+    if (Array.isArray(sanitized.mcqOptions)) {
+        sanitized.mcqOptions = sanitizeMcqOptionsForClient(sanitized.mcqOptions, includeSensitive);
+    }
+
+    if (Array.isArray(sanitized.options)) {
+        sanitized.options = sanitizeMcqOptionsForClient(sanitized.options, includeSensitive);
+    }
+
+    if (sanitized.mcq && typeof sanitized.mcq === 'object' && Array.isArray(sanitized.mcq.options)) {
+        sanitized.mcq = {
+            ...sanitized.mcq,
+            options: sanitizeMcqOptionsForClient(sanitized.mcq.options, includeSensitive)
+        };
+    }
+
+    SENSITIVE_QUESTION_KEYS.forEach((key) => {
+        if (key in sanitized) {
+            delete sanitized[key];
+        }
+    });
 
     if (sanitized.codingConfig) {
         sanitized.codingConfig = sanitizeCodingConfigForClient(sanitized.codingConfig, includeSensitive);
@@ -105,6 +134,9 @@ export function sanitizeQuestionsPayloadForClient(questionsPayload: any, include
                     }
                 ];
             }
+            if (value && typeof value === 'object') {
+                return [key, sanitizeQuestionForClient(value, includeSensitive)];
+            }
             return [key, value];
         });
         return Object.fromEntries(sanitizedEntries);
@@ -134,5 +166,23 @@ function sanitizeTestCasesForClient(
             output: HIDDEN_TESTCASE_PLACEHOLDER,
             expectedOutput: HIDDEN_TESTCASE_PLACEHOLDER
         };
+    });
+}
+
+function sanitizeMcqOptionsForClient(options: any[], includeSensitive: boolean): any[] {
+    if (!Array.isArray(options) || includeSensitive) return options;
+
+    return options.map((option: any) => {
+        if (!option || typeof option !== 'object') return option;
+
+        const sanitizedOption = {
+            ...option
+        };
+
+        if ('isCorrect' in sanitizedOption) {
+            delete sanitizedOption.isCorrect;
+        }
+
+        return sanitizedOption;
     });
 }

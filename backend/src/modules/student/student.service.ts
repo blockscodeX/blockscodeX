@@ -226,7 +226,7 @@ export class StudentService {
             throw new Error('Results not published yet');
         }
 
-        const transformed = this.examService.transformExam(session.exam);
+        const transformed = this.examService.transformExam(session.exam, false);
 
         return {
             details: {
